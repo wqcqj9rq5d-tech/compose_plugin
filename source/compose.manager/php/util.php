@@ -176,6 +176,319 @@ class Path
     }
 }
 
+/**
+ * Import helper for Docker Manager containers.
+ */
+function getDockerManagerImportCandidates(): array
+{
+    require_once "/usr/local/emhttp/plugins/dynamix.docker.manager/include/DockerClient.php";
+
+    $dockerClient = new DockerClient();
+    $containers = $dockerClient->getDockerContainers();
+    $candidates = [];
+
+    foreach ($containers as $ct) {
+        if (!is_array($ct)) {
+            continue;
+        }
+        $manager = $ct['Manager'] ?? '';
+        if ($manager !== 'dockerman') {
+            continue;
+        }
+        $candidates[] = [
+            'Id' => $ct['Id'] ?? '',
+            'Name' => $ct['Name'] ?? '',
+            'Image' => $ct['Image'] ?? '',
+            'Status' => $ct['Status'] ?? '',
+            'Running' => $ct['Running'] ?? false,
+            'Icon' => $ct['Icon'] ?? '',
+            'Url' => $ct['Url'] ?? '',
+            'TSUrl' => $ct['TSUrl'] ?? '',
+            'Labels' => $ct['Labels'] ?? [],
+        ];
+    }
+
+    return $candidates;
+}
+
+function getDockerManagerContainerInfo(string $id): array
+{
+    require_once "/usr/local/emhttp/plugins/dynamix.docker.manager/include/DockerClient.php";
+
+    $dockerClient = new DockerClient();
+    $info = $dockerClient->getContainerDetails($id);
+    if (!is_array($info)) {
+        return [];
+    }
+    return $info;
+}
+
+function dockerContainerToComposeService(array $info): array
+{
+    $service = [];
+    $serviceName = ltrim(trim($info['Name'] ?? $info['Id'] ?? ''), '/');
+    $serviceName = preg_replace('/[^a-zA-Z0-9_.-]/', '_', $serviceName);
+    if ($serviceName === '') {
+        $serviceName = 'container_' . substr($info['Id'] ?? 'unknown', 0, 12);
+    }
+
+    $config = $info['Config'] ?? [];
+    $hostConfig = $info['HostConfig'] ?? [];
+
+    $service['image'] = $config['Image'] ?? '';
+
+    // Do not include explicit command/entrypoint by default in generated compose
+    // because Compose can use defaults from the image; this avoids embedding Unraid startup semantics.
+
+    if (!empty($config['Env']) && is_array($config['Env'])) {
+        $env = [];
+        $blacklist = ['TERM', 'LANG', 'HOME', 'PATH', 'HOST_OS', 'HOST_HOSTNAME', 'HOST_CONTAINERNAME'];
+        foreach ($config['Env'] as $entry) {
+            if (!str_contains($entry, '=')) {
+                continue;
+            }
+            [$key, $value] = explode('=', $entry, 2);
+            if (in_array($key, $blacklist, true)) {
+                continue;
+            }
+            $env[$key] = $value;
+        }
+        if (!empty($env)) {
+            // Replace values with env variable expansion in compose file, values go in .env file.
+            $service['environment'] = array_map(function ($key) {
+                return sprintf('%s=${%s}', $key, $key);
+            }, array_keys($env));
+            // We store the resolved env set as a reserved field to generate .env file later.
+            $service['__resolved_env'] = $env;
+        }
+    }
+
+    if (!empty($hostConfig['RestartPolicy']['Name'])) {
+        $policy = $hostConfig['RestartPolicy']['Name'];
+        if ($policy !== 'no') {
+            $service['restart'] = $policy;
+        }
+    }
+
+    $ports = [];
+    if (!empty($hostConfig['PortBindings']) && is_array($hostConfig['PortBindings'])) {
+        foreach ($hostConfig['PortBindings'] as $port => $bindings) {
+            [$privatePort, $proto] = array_pad(explode('/', $port), 2, 'tcp');
+            foreach ((array)$bindings as $bind) {
+                if (!is_array($bind)) continue;
+                $hostIp = $bind['HostIp'] ?? '';
+                $hostPort = $bind['HostPort'] ?? '';
+                if ($hostIp !== '' && $hostIp !== '0.0.0.0') {
+                    $ports[] = "{$hostIp}:{$hostPort}:{$privatePort}/{$proto}";
+                } elseif ($hostPort !== '') {
+                    $ports[] = "{$hostPort}:{$privatePort}/{$proto}";
+                } else {
+                    $ports[] = "{$privatePort}/{$proto}";
+                }
+            }
+        }
+    }
+    if (!empty($ports)) {
+        $service['ports'] = $ports;
+    }
+
+    $volumes = [];
+    if (!empty($info['Mounts']) && is_array($info['Mounts'])) {
+        foreach ($info['Mounts'] as $mount) {
+            $source = $mount['Source'] ?? '';
+            $target = $mount['Destination'] ?? '';
+            if ($source !== '' && $target !== '') {
+                $mode = '';
+                if (array_key_exists('RW', $mount) && $mount['RW'] === false) {
+                    $mode = ':ro';
+                }
+                $volumes[] = "{$source}:{$target}{$mode}";
+            }
+        }
+    }
+    if (!empty($volumes)) {
+        $service['volumes'] = $volumes;
+    }
+
+    $labels = [];
+    if (!empty($config['Labels']) && is_array($config['Labels'])) {
+        foreach ($config['Labels'] as $key => $val) {
+            // Skip internal Compose Manager markers and helper labels
+            if (in_array($key, ['net.unraid.docker.managed', 'net.unraid.docker.icon', 'net.unraid.docker.webui'], true)) {
+                continue;
+            }
+
+            // Skip uncaught LinuxServer/OCI metadata that is not needed in compose services
+            if ($key === 'build_version' || $key === 'maintainer') {
+                continue;
+            }
+            $excludePrefixes = [
+                'org.opencontainers.image.',
+                'org.label-schema.',
+                'com.docker.compose.',
+            ];
+            $skip = false;
+            foreach ($excludePrefixes as $prefix) {
+                if (str_starts_with($key, $prefix)) {
+                    $skip = true;
+                    break;
+                }
+            }
+            if ($skip) {
+                continue;
+            }
+
+            $labels[$key] = $val;
+        }
+    }
+    if (!empty($labels)) {
+        $service['labels'] = $labels;
+    }
+
+    if (!empty($hostConfig['NetworkMode'])) {
+        $networkMode = $hostConfig['NetworkMode'];
+        if ($networkMode !== 'default') {
+            if (in_array($networkMode, ['host', 'bridge', 'none'])) {
+                $service['network_mode'] = $networkMode;
+            }
+        }
+    }
+
+    return ['name' => $serviceName, 'service' => $service];
+}
+
+function dockerServicesToComposeYml(array $services): string
+{
+    $yaml = "services:\n";
+    $allNetworks = [];
+
+    foreach ($services as $name => $service) {
+        $yaml .= "  " . $name . ":\n";
+
+        if (!empty($service['networks']) && is_array($service['networks'])) {
+            foreach ($service['networks'] as $networkName) {
+                if (!in_array($networkName, $allNetworks, true)) {
+                    $allNetworks[] = $networkName;
+                }
+            }
+        }
+
+        foreach ($service as $key => $value) {
+            if ($key === '__resolved_env' || $key === 'icon' || $key === 'webui') {
+                continue; // internal helper field and metadata should not be in compose service
+            }
+            if (is_string($value) || is_numeric($value) || is_bool($value)) {
+                $yaml .= "    $key: " . (is_bool($value) ? ($value ? 'true' : 'false') : $value) . "\n";
+            } elseif (is_array($value)) {
+                $yaml .= "    $key:\n";
+                if (array_is_list($value)) {
+                    foreach ($value as $item) {
+                        $yaml .= "      - " . (is_bool($item) ? ($item ? 'true' : 'false') : $item) . "\n";
+                    }
+                } else {
+                    foreach ($value as $subKey => $subVal) {
+                        $yaml .= "      " . $subKey . ": " . (is_bool($subVal) ? ($subVal ? 'true' : 'false') : $subVal) . "\n";
+                    }
+                }
+            }
+        }
+    }
+
+    if (!empty($allNetworks)) {
+        $yaml .= "\nnetworks:\n";
+        foreach ($allNetworks as $networkName) {
+            $yaml .= "  " . $networkName . ":\n";
+            $yaml .= "    external: true\n";
+        }
+    }
+
+    return $yaml;
+}
+
+function dockerResolveEnvAndCompose(array &$services): string
+{
+    $globalEnv = [];
+
+    // Track environment values by canonical variable to avoid duplicates for same values across multiple services
+    $valueKeyMap = [];
+
+    foreach ($services as $serviceName => &$service) {
+        $serviceEnvItems = [];
+
+        if (!empty($service['__resolved_env']) && is_array($service['__resolved_env'])) {
+            foreach ($service['__resolved_env'] as $k => $v) {
+                if ($k === '') {
+                    continue;
+                }
+
+                // If single value reused exactly, reuse same variable name (dedupe name and value)
+                if (isset($valueKeyMap[$k][$v])) {
+                    $resolvedKey = $valueKeyMap[$k][$v];
+                } else {
+                    if (!array_key_exists($k, $globalEnv)) {
+                        $globalEnv[$k] = $v;
+                        $resolvedKey = $k;
+                    } elseif ($globalEnv[$k] === $v) {
+                        $resolvedKey = $k;
+                    } else {
+                        $suffix = 1;
+                        $resolvedKey = $k . '_' . $suffix;
+                        while (array_key_exists($resolvedKey, $globalEnv)) {
+                            if ($globalEnv[$resolvedKey] === $v) {
+                                break;
+                            }
+                            $suffix++;
+                            $resolvedKey = $k . '_' . $suffix;
+                        }
+                        if (!array_key_exists($resolvedKey, $globalEnv)) {
+                            $globalEnv[$resolvedKey] = $v;
+                        }
+                    }
+                    $valueKeyMap[$k][$v] = $resolvedKey;
+                }
+
+                $serviceEnvItems[] = sprintf('%s=${%s}', $k, $resolvedKey);
+            }
+        }
+
+        if (!empty($serviceEnvItems)) {
+            $service['environment'] = $serviceEnvItems;
+        }
+
+        // Cleanup internal field before rendering
+        unset($service['__resolved_env']);
+    }
+    unset($service);
+
+    $lines = [];
+    foreach ($globalEnv as $k => $v) {
+        $lines[] = "$k=$v";
+    }
+    return implode("\n", $lines) . (empty($lines) ? '' : "\n");
+}
+
+function dockerAddOverrideIcons(array $importedServices): string
+{
+    $yaml = "services:\n";
+    foreach ($importedServices as $serviceName => $service) {
+        $labels = ['net.unraid.docker.managed' => 'composeman'];
+        $icon = $service['icon'] ?? null;
+        $webui = $service['webui'] ?? null;
+        if ($icon) {
+            $labels['net.unraid.docker.icon'] = $icon;
+        }
+        if ($webui) {
+            $labels['net.unraid.docker.webui'] = $webui;
+        }
+
+        $yaml .= "  " . $serviceName . ":\n";
+        $yaml .= "    labels:\n";
+        foreach ($labels as $key => $val) {
+            $yaml .= "      " . $key . ": \"" . addslashes($val) . "\"\n";
+        }
+    }
+    return $yaml;
+}
 
 function pruneOverrideContentServices(string $overrideContent, array $validServices): array
 {

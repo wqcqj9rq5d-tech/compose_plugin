@@ -2168,6 +2168,156 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
 
 
 
+    function importFromDockerManager() {
+        var modalHtml = `
+            <div id="compose-import-modal-overlay" class="compose-modal-overlay" style="display:flex;">
+                <div class="compose-modal" role="dialog" aria-modal="true" aria-labelledby="compose-import-modal-title" tabindex="-1" style="width:760px; max-width:95%;">
+                    <div class="compose-modal-header">
+                        <span id="compose-import-modal-title">Import from Docker Manager</span>
+                        <button type="button" class="editor-btn editor-btn-cancel" onclick="closeComposeImportModal()" aria-label="Close modal"><i class="fa fa-times"></i></button>
+                    </div>
+                    <div class="compose-modal-body" id="compose-import-modal-body">Loading Docker Manager containers...</div>
+                    <div class="compose-modal-footer" id="compose-import-modal-footer"></div>
+                </div>
+            </div>
+        `;
+
+        var existing = document.getElementById('compose-import-modal-overlay');
+        if (existing) existing.remove();
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+
+        window.closeComposeImportModal = function() {
+            var overlay = document.getElementById('compose-import-modal-overlay');
+            if (overlay) overlay.remove();
+        };
+
+        $.post(caURL, {action: 'getDockerContainersForImport'}, function(data) {
+            var response;
+            try { response = JSON.parse(data); } catch (e) { response = { result:'error', message: 'Invalid response' }; }
+            if (response.result !== 'success') {
+                $('#compose-import-modal-body').html('<div style="color:#f44336">Failed to load containers.</div>');
+                return;
+            }
+            var containers = response.containers || [];
+            if (!containers.length) {
+                $('#compose-import-modal-body').html('<div>No Docker Manager containers found.</div>');
+                return;
+            }
+            var rows = containers.map(function(ct) {
+                return '<tr>' +
+                    '<td><input type="checkbox" class="cm-import-container" value="' + ct.Id + '"></td>' +
+                    '<td>' + escapeHtml(ct.Name) + '</td>' +
+                    '<td>' + escapeHtml(ct.Image) + '</td>' +
+                    '<td>' + escapeHtml(ct.Status) + '</td>' +
+                    '<td>' + (ct.Icon ? '<img src="' + ct.Icon + '" style="height:20px;max-width:20px;" />' : '') + '</td>' +
+                    '<td>' + (ct.Url ? '<a href="' + ct.Url + '" target="_blank">Link</a>' : '') + '</td>' +
+                    '</tr>';
+            }).join('');
+            var table = '<div style="max-height:300px;overflow:auto;"><table class="tablesorter" style="width:100%"><thead><tr><th></th><th>Name</th><th>Image</th><th>Status</th><th>Icon</th><th>WebUI</th></tr></thead><tbody>' + rows + '</tbody></table></div>';
+            $('#compose-import-modal-body').html(table);
+            $('#compose-import-modal-footer').html('<button class="editor-btn editor-btn-cancel" onclick="closeComposeImportModal()">Cancel</button><button class="editor-btn editor-btn-save-all" onclick="composeImportPreview()">Next</button>');
+        }).fail(function() {
+            $('#compose-import-modal-body').html('<div style="color:#f44336">Failed to contact server.</div>');
+        });
+    }
+
+    function composeImportPreview() {
+        var selected = [];
+        $('.cm-import-container:checked').each(function() {
+            selected.push(this.value);
+        });
+        if (!selected.length) {
+            swal('No containers selected', 'Please select at least one container to import.', 'warning');
+            return;
+        }
+
+        $('#compose-import-modal-body').html('<div>Generating import preview...</div>');
+        $('#compose-import-modal-footer').empty();
+
+        $.post(caURL, {action: 'generateImportPreview', containerIds: JSON.stringify(selected)}, function(data) {
+            var response;
+            try { response = JSON.parse(data); } catch (e) { response = { result:'error', message: 'Invalid response' }; }
+            if (response.result !== 'success') {
+                $('#compose-import-modal-body').html('<div style="color:#f44336">' + (response.message || 'Failed to generate preview') + '</div>');
+                return;
+            }
+            var preview = '<div style="margin-bottom:10px;"><strong>Compose YAML preview</strong></div>' +
+                '<pre style="max-height:220px; overflow:auto; background:#1e1e1e; color:#ffffff; padding:10px; border-radius:6px;">' + escapeHtml(response.composeYml) + '</pre>' +
+                '<div style="margin-top:10px;"><strong>.env preview (optional)</strong></div>' +
+                '<pre style="max-height:120px; overflow:auto; background:#1e1e1e; color:#ffffff; padding:10px; border-radius:6px;">' + escapeHtml(response.env) + '</pre>' +
+                '<div style="margin-top:10px;"><strong>Override preview (icons/webui)</strong></div>' +
+                '<pre style="max-height:120px; overflow:auto; background:#1e1e1e; color:#ffffff; padding:10px; border-radius:6px;">' + escapeHtml(response.override) + '</pre>';
+
+            preview += '<div style="margin-top:14px; font-weight:bold;">Stack name</div>' +
+                '<input type="text" id="cm-import-stack-name" placeholder="Import Stack Name" style="width:100%; margin-bottom:10px;">' +
+                '<div style="margin-bottom:5px; font-weight:bold;">Actions</div>' +
+                '<label style="display:block;margin-bottom:4px;"><input id="cm-import-stop-containers" type="checkbox" checked> Stop containers</label>' +
+                '<label style="display:block;margin-bottom:4px;"><input id="cm-import-remove-containers" type="checkbox" checked> Remove containers</label>' +
+                '<label style="display:block;margin-bottom:10px;"><input id="cm-import-start-stack" type="checkbox" checked> Start imported stack</label>';
+
+            $('#compose-import-modal-body').html(preview);
+            $('#compose-import-modal-footer').html('<button class="editor-btn editor-btn-cancel" onclick="closeComposeImportModal()">Cancel</button><button class="editor-btn editor-btn-save-all" onclick="composeImportPerform()">Import</button>');
+
+            $('#cm-import-remove-containers').on('change', function() {
+                if ($(this).is(':checked')) {
+                    $('#cm-import-stop-containers').prop('checked', true);
+                }
+            });
+            $('#cm-import-stop-containers').on('change', function() {
+                if (!$(this).is(':checked')) {
+                    $('#cm-import-remove-containers').prop('checked', false);
+                }
+            });
+
+            window.__composeImportPayload = {composeYml: response.composeYml, env: response.env, override: response.override, containerIds: selected};
+        }).fail(function() {
+            $('#compose-import-modal-body').html('<div style="color:#f44336">Failed to contact server for preview.</div>');
+        });
+    }
+
+    function composeImportPerform() {
+        var payload = window.__composeImportPayload || {};
+        var name = document.getElementById('cm-import-stack-name').value.trim();
+        if (!name) {
+            swal('Stack name required', 'Please provide a stack name to continue.', 'warning');
+            return;
+        }
+
+        var stopContainers = document.getElementById('cm-import-stop-containers').checked ? '1' : '0';
+        var removeContainers = document.getElementById('cm-import-remove-containers').checked ? '1' : '0';
+        var startStack = document.getElementById('cm-import-start-stack').checked ? '1' : '0';
+
+        $.post(caURL, {
+            action: 'performImportTransfer',
+            stackName: name,
+            stopContainers: stopContainers,
+            removeContainers: removeContainers,
+            startStack: startStack,
+            composeYml: payload.composeYml || '',
+            env: payload.env || '',
+            override: payload.override || '',
+            containerIds: JSON.stringify(payload.containerIds || [])
+        }, function(data) {
+            var response;
+            try { response = JSON.parse(data); } catch (e) { response = { result:'error', message: 'Invalid response' }; }
+            if (response.result === 'success') {
+                closeComposeImportModal();
+                composeLoadlist();
+                openEditorModalByProject(response.project, response.projectName);
+
+                if (response.startStack === 1 && response.projectPath) {
+                    ComposeUp(response.projectPath);
+                }
+
+                swal('Imported', 'Stack imported successfully.', 'success');
+            } else {
+                swal('Import failed', response.message || 'Unknown error', 'error');
+            }
+        }).fail(function() {
+            swal('Import failed', 'Communication error', 'error');
+        });
+    }
+
     function stripTags(string) {
         return string.replace(/(<([^>]+)>)/ig, "");
     }
@@ -5846,6 +5996,7 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
     </div>
     <span class='tipsterallowed' hidden>
         <input type='button' value='Add New Stack' onclick='addStack();'>
+        <input type='button' value='Import from Docker Manager' onclick='importFromDockerManager();'>
         <input type='button' value='Start All' onclick='startAllStacks();' id='startAllBtn'>
         <input type='button' value='Stop All' onclick='stopAllStacks();' id='stopAllBtn'>
         <input type='button' value='Check for Updates' onclick='checkAllUpdates();' id='checkUpdatesBtn'>

@@ -77,6 +77,144 @@ switch ($_POST['action']) {
         clientDebug("[stack] Created stack: $stackName", null, 'daemon', 'info');
         echo json_encode(['result' => 'success', 'message' => '', 'project' => $stack->projectFolder, 'projectName' => $stack->getName()]);
         break;
+    case 'getDockerContainersForImport':
+        $candidates = getDockerManagerImportCandidates();
+        echo json_encode(['result' => 'success', 'containers' => $candidates]);
+        break;
+    case 'generateImportPreview':
+        $containerIds = [];
+        if (!empty($_POST['containerIds'])) {
+            $data = json_decode($_POST['containerIds'], true);
+            if (is_array($data)) {
+                $containerIds = $data;
+            }
+        }
+        if (empty($containerIds)) {
+            echo json_encode(['result' => 'error', 'message' => 'No containers selected']);
+            break;
+        }
+
+        $services = [];
+        foreach ($containerIds as $id) {
+            $id = trim($id);
+            if ($id === '') {
+                continue;
+            }
+            $info = getDockerManagerContainerInfo($id);
+            if (empty($info)) {
+                continue;
+            }
+            $converted = dockerContainerToComposeService($info);
+            $name = $converted['name'];
+            $service = $converted['service'];
+
+            $serviceIcon = $info['Config']['Labels']['net.unraid.docker.icon'] ?? '';
+            $serviceWebui = $info['Config']['Labels']['net.unraid.docker.webui'] ?? '';
+            if ($serviceIcon) {
+                $service['icon'] = $serviceIcon;
+            }
+            if ($serviceWebui) {
+                $service['webui'] = $serviceWebui;
+            }
+
+            $originalName = $name;
+            $append = 1;
+            while (isset($services[$name])) {
+                $name = $originalName . '_' . $append;
+                $append++;
+            }
+            $services[$name] = $service;
+        }
+
+        if (empty($services)) {
+            echo json_encode(['result' => 'error', 'message' => 'No valid Docker Manager containers found for import']);
+            break;
+        }
+
+        $env = dockerResolveEnvAndCompose($services);
+        $composeYml = dockerServicesToComposeYml($services);
+        $override = dockerAddOverrideIcons($services);
+
+        echo json_encode(['result' => 'success', 'composeYml' => $composeYml, 'env' => $env, 'override' => $override]);
+        break;
+    case 'performImportTransfer':
+        $stackName = trim($_POST['stackName'] ?? '');
+        $stackDesc = trim($_POST['stackDesc'] ?? '');
+        $stopContainers = (!empty($_POST['stopContainers']) && $_POST['stopContainers'] === '1');
+        $removeContainers = (!empty($_POST['removeContainers']) && $_POST['removeContainers'] === '1');
+        $startStack = (!empty($_POST['startStack']) && $_POST['startStack'] === '1');
+        $composeYml = trim($_POST['composeYml'] ?? '');
+        $env = trim($_POST['env'] ?? '');
+        $override = trim($_POST['override'] ?? '');
+
+        if ($stackName === '') {
+            echo json_encode(['result' => 'error', 'message' => 'Stack name is required']);
+            break;
+        }
+
+        if ($removeContainers && !$stopContainers) {
+            // Enforce logical dependency (remove implies stop)
+            $stopContainers = true;
+        }
+
+        try {
+            $stackInfo = StackInfo::createNew($compose_root, $stackName, $stackDesc);
+        } catch (\RuntimeException $e) {
+            clientDebug('[stack] Failed to create import stack: ' . $e->getMessage(), null, 'daemon', 'error');
+            echo json_encode(['result' => 'error', 'message' => 'Failed to create new stack']);
+            break;
+        }
+
+        $composePath = $stackInfo->composeFilePath;
+        $envPath = $stackInfo->getEnvFilePath() ?? $stackInfo->composeSource . '/.env';
+        $overridePath = $stackInfo->getOverridePath() ?: $stackInfo->composeSource . '/docker-compose.override.yml';
+
+        if ($composeYml !== '') {
+            file_put_contents($composePath, $composeYml);
+        }
+        if ($env !== '') {
+            file_put_contents($envPath, $env);
+        }
+        if ($override !== '') {
+            file_put_contents($overridePath, $override);
+        }
+
+        $containerIds = [];
+        if (!empty($_POST['containerIds'])) {
+            $data = json_decode($_POST['containerIds'], true);
+            if (is_array($data)) {
+                $containerIds = $data;
+            }
+        }
+
+        foreach ($containerIds as $id) {
+            $id = trim($id);
+            if ($id === '') {
+                continue;
+            }
+
+            if ($stopContainers) {
+                exec('docker stop ' . escapeshellarg($id) . ' 2>&1');
+                if (!$removeContainers) {
+                    exec('docker container update --label-add net.unraid.docker.managed=composeman ' . escapeshellarg($id) . ' 2>&1');
+                }
+            }
+
+            if ($removeContainers) {
+                exec('docker rm -f ' . escapeshellarg($id) . ' 2>&1');
+            }
+        }
+
+        echo json_encode([
+            'result' => 'success',
+            'message' => 'Stack imported successfully',
+            'project' => $stackInfo->projectFolder,
+            'projectName' => $stackInfo->getName(),
+            'projectPath' => $stackInfo->path,
+            'startStack' => $startStack ? 1 : 0
+        ]);
+
+        break;
     case 'deleteStack':
         $stackName = isset($_POST['stackName']) ? basename(trim($_POST['stackName'])) : "";
         if (!$stackName) {

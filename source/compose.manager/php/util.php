@@ -350,11 +350,51 @@ function dockerContainerToComposeService(array $info): array
         if ($networkMode !== 'default') {
             if (in_array($networkMode, ['host', 'bridge', 'none'])) {
                 $service['network_mode'] = $networkMode;
+            } elseif (str_starts_with($networkMode, 'container:')) {
+                $service['network_mode'] = $networkMode;
             }
         }
     }
 
+    // Extract named networks from NetworkSettings
+    $networks = $info['NetworkSettings']['Networks'] ?? [];
+    if (is_array($networks) && !isset($service['network_mode'])) {
+        $namedNetworks = [];
+        foreach (array_keys($networks) as $netName) {
+            if (!in_array($netName, ['bridge', 'host', 'none'], true)) {
+                $namedNetworks[] = $netName;
+            }
+        }
+        if (!empty($namedNetworks)) {
+            $service['networks'] = $namedNetworks;
+        }
+    }
+
     return ['name' => $serviceName, 'service' => $service];
+}
+
+/**
+ * Quote a YAML scalar value if it contains special characters.
+ */
+function yamlQuoteValue($value): string
+{
+    if (is_bool($value)) {
+        return $value ? 'true' : 'false';
+    }
+    $str = (string)$value;
+    if ($str === '') {
+        return '""';
+    }
+    // Quote if value contains YAML-special characters or could be misinterpreted
+    if (preg_match('/[:\#{}\[\],&*?|>!\'"%@`]/', $str)
+        || preg_match('/^[\s-]/', $str)
+        || preg_match('/\s$/', $str)
+        || in_array(strtolower($str), ['true', 'false', 'null', 'yes', 'no', 'on', 'off'], true)
+        || is_numeric($str)
+    ) {
+        return '"' . str_replace(['\\', '"', "\n"], ['\\\\', '\\"', '\\n'], $str) . '"';
+    }
+    return $str;
 }
 
 function dockerServicesToComposeYml(array $services): string
@@ -378,16 +418,16 @@ function dockerServicesToComposeYml(array $services): string
                 continue; // internal helper field and metadata should not be in compose service
             }
             if (is_string($value) || is_numeric($value) || is_bool($value)) {
-                $yaml .= "    $key: " . (is_bool($value) ? ($value ? 'true' : 'false') : $value) . "\n";
+                $yaml .= "    $key: " . yamlQuoteValue($value) . "\n";
             } elseif (is_array($value)) {
                 $yaml .= "    $key:\n";
                 if (array_is_list($value)) {
                     foreach ($value as $item) {
-                        $yaml .= "      - " . (is_bool($item) ? ($item ? 'true' : 'false') : $item) . "\n";
+                        $yaml .= "      - " . yamlQuoteValue($item) . "\n";
                     }
                 } else {
                     foreach ($value as $subKey => $subVal) {
-                        $yaml .= "      " . $subKey . ": " . (is_bool($subVal) ? ($subVal ? 'true' : 'false') : $subVal) . "\n";
+                        $yaml .= "      " . $subKey . ": " . yamlQuoteValue($subVal) . "\n";
                     }
                 }
             }
@@ -462,7 +502,13 @@ function dockerResolveEnvAndCompose(array &$services): string
 
     $lines = [];
     foreach ($globalEnv as $k => $v) {
-        $lines[] = "$k=$v";
+        // Quote values that contain special characters to prevent .env parsing issues
+        if (preg_match('/[\s#$"\\\n]/', $v) || $v === '') {
+            $escaped = str_replace(['\\', '"', '$', "\n"], ['\\\\', '\\"', '\\$', '\\n'], $v);
+            $lines[] = "$k=\"$escaped\"";
+        } else {
+            $lines[] = "$k=$v";
+        }
     }
     return implode("\n", $lines) . (empty($lines) ? '' : "\n");
 }
@@ -484,7 +530,7 @@ function dockerAddOverrideIcons(array $importedServices): string
         $yaml .= "  " . $serviceName . ":\n";
         $yaml .= "    labels:\n";
         foreach ($labels as $key => $val) {
-            $yaml .= "      " . $key . ": \"" . addslashes($val) . "\"\n";
+            $yaml .= "      " . $key . ": " . yamlQuoteValue($val) . "\n";
         }
     }
     return $yaml;

@@ -216,8 +216,9 @@ if ($cpuCount <= 0) {
         padding-right: 20px
     }
 
-    .dropdown-menu {
-        z-index: 100 !important; 
+    .compose-modal-overlay .dropdown-menu,
+    #compose_stacks .dropdown-menu {
+        z-index: 100;
     }
 
     /* CPU & Memory load display (matches Docker manager usage-disk style) */
@@ -2204,13 +2205,21 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
                 return;
             }
             var rows = containers.map(function(ct) {
+                var iconHtml = '';
+                if (ct.Icon) {
+                    iconHtml = '<img src="' + composeEscapeHtml(ct.Icon) + '" style="height:20px;max-width:20px;" />';
+                }
+                var urlHtml = '';
+                if (ct.Url && /^https?:\/\//i.test(ct.Url)) {
+                    urlHtml = '<a href="' + composeEscapeHtml(ct.Url) + '" target="_blank">Link</a>';
+                }
                 return '<tr>' +
-                    '<td><input type="checkbox" class="cm-import-container" value="' + ct.Id + '"></td>' +
+                    '<td><input type="checkbox" class="cm-import-container" value="' + composeEscapeHtml(ct.Id) + '"></td>' +
                     '<td>' + composeEscapeHtml(ct.Name) + '</td>' +
                     '<td>' + composeEscapeHtml(ct.Image) + '</td>' +
                     '<td>' + composeEscapeHtml(ct.Status) + '</td>' +
-                    '<td>' + (ct.Icon ? '<img src="' + ct.Icon + '" style="height:20px;max-width:20px;" />' : '') + '</td>' +
-                    '<td>' + (ct.Url ? '<a href="' + ct.Url + '" target="_blank">Link</a>' : '') + '</td>' +
+                    '<td>' + iconHtml + '</td>' +
+                    '<td>' + urlHtml + '</td>' +
                     '</tr>';
             }).join('');
             var table = '<div style="max-height:300px;overflow:auto;"><table class="tablesorter" style="width:100%"><thead><tr><th></th><th>Name</th><th>Image</th><th>Status</th><th>Icon</th><th>WebUI</th></tr></thead><tbody>' + rows + '</tbody></table></div>';

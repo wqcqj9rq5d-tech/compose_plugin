@@ -161,7 +161,15 @@ switch ($_POST['action']) {
             $stackInfo = StackInfo::createNew($compose_root, $stackName, $stackDesc);
         } catch (\RuntimeException $e) {
             clientDebug('[stack] Failed to create import stack: ' . $e->getMessage(), null, 'daemon', 'error');
-            echo json_encode(['result' => 'error', 'message' => 'Failed to create new stack']);
+            $userMessage = match (true) {
+                str_contains($e->getMessage(), 'cannot be empty') => 'Stack name cannot be empty.',
+                str_contains($e->getMessage(), 'empty folder name') => 'Invalid stack name.',
+                str_contains($e->getMessage(), 'unique folder name') => 'Could not create a unique folder for this stack.',
+                str_contains($e->getMessage(), 'escape compose root') => 'Invalid stack name.',
+                str_contains($e->getMessage(), 'Invalid compose root') => 'Server configuration error.',
+                default => 'Failed to create stack. Check server logs for details.',
+            };
+            echo json_encode(['result' => 'error', 'message' => $userMessage]);
             break;
         }
 
@@ -170,6 +178,19 @@ switch ($_POST['action']) {
         $overridePath = $stackInfo->getOverridePath() ?: $stackInfo->composeSource . '/docker-compose.override.yml';
 
         if ($composeYml !== '') {
+            // Validate that the compose content is parseable YAML before writing
+            try {
+                $parsed = yaml_parse($composeYml);
+                if ($parsed === false) {
+                    throw new \Exception('Invalid YAML');
+                }
+            } catch (\Throwable $e) {
+                // yaml_parse may not be available; fall back to basic structure check
+                if (function_exists('yaml_parse')) {
+                    echo json_encode(['result' => 'error', 'message' => 'Generated compose YAML is invalid']);
+                    break;
+                }
+            }
             file_put_contents($composePath, $composeYml);
         }
         if ($env !== '') {
@@ -195,9 +216,6 @@ switch ($_POST['action']) {
 
             if ($stopContainers) {
                 exec('docker stop ' . escapeshellarg($id) . ' 2>&1');
-                if (!$removeContainers) {
-                    exec('docker container update --label-add net.unraid.docker.managed=composeman ' . escapeshellarg($id) . ' 2>&1');
-                }
             }
 
             if ($removeContainers) {

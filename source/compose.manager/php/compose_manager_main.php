@@ -2206,9 +2206,9 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
             var rows = containers.map(function(ct) {
                 return '<tr>' +
                     '<td><input type="checkbox" class="cm-import-container" value="' + ct.Id + '"></td>' +
-                    '<td>' + escapeHtml(ct.Name) + '</td>' +
-                    '<td>' + escapeHtml(ct.Image) + '</td>' +
-                    '<td>' + escapeHtml(ct.Status) + '</td>' +
+                    '<td>' + composeEscapeHtml(ct.Name) + '</td>' +
+                    '<td>' + composeEscapeHtml(ct.Image) + '</td>' +
+                    '<td>' + composeEscapeHtml(ct.Status) + '</td>' +
                     '<td>' + (ct.Icon ? '<img src="' + ct.Icon + '" style="height:20px;max-width:20px;" />' : '') + '</td>' +
                     '<td>' + (ct.Url ? '<a href="' + ct.Url + '" target="_blank">Link</a>' : '') + '</td>' +
                     '</tr>';
@@ -2242,11 +2242,11 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
                 return;
             }
             var preview = '<div style="margin-bottom:10px;"><strong>Compose YAML preview</strong></div>' +
-                '<pre style="max-height:220px; overflow:auto; background:#1e1e1e; color:#ffffff; padding:10px; border-radius:6px;">' + escapeHtml(response.composeYml) + '</pre>' +
+                '<pre style="max-height:220px; overflow:auto; background:#1e1e1e; color:#ffffff; padding:10px; border-radius:6px;">' + composeEscapeHtml(response.composeYml) + '</pre>' +
                 '<div style="margin-top:10px;"><strong>.env preview (optional)</strong></div>' +
-                '<pre style="max-height:120px; overflow:auto; background:#1e1e1e; color:#ffffff; padding:10px; border-radius:6px;">' + escapeHtml(response.env) + '</pre>' +
+                '<pre style="max-height:120px; overflow:auto; background:#1e1e1e; color:#ffffff; padding:10px; border-radius:6px;">' + composeEscapeHtml(response.env) + '</pre>' +
                 '<div style="margin-top:10px;"><strong>Override preview (icons/webui)</strong></div>' +
-                '<pre style="max-height:120px; overflow:auto; background:#1e1e1e; color:#ffffff; padding:10px; border-radius:6px;">' + escapeHtml(response.override) + '</pre>';
+                '<pre style="max-height:120px; overflow:auto; background:#1e1e1e; color:#ffffff; padding:10px; border-radius:6px;">' + composeEscapeHtml(response.override) + '</pre>';
 
             preview += '<div style="margin-top:14px; font-weight:bold;">Stack name</div>' +
                 '<input type="text" id="cm-import-stack-name" placeholder="Import Stack Name" style="width:100%; margin-bottom:10px;">' +

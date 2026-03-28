@@ -137,6 +137,227 @@ switch ($_POST['action']) {
 
         echo json_encode(['result' => 'success', 'composeYml' => $composeYml, 'env' => $env, 'override' => $override]);
         break;
+
+    case 'generateImportData':
+        // Rich import data for the 6-stage wizard — returns per-service metadata, port conflicts, networks
+        $containerIds = [];
+        if (!empty($_POST['containerIds'])) {
+            $data = json_decode($_POST['containerIds'], true);
+            if (is_array($data)) {
+                $containerIds = $data;
+            }
+        }
+        if (empty($containerIds)) {
+            echo json_encode(['result' => 'error', 'message' => 'No containers selected']);
+            break;
+        }
+
+        $services = [];
+        $servicesMeta = [];
+        foreach ($containerIds as $id) {
+            $id = trim($id);
+            if ($id === '') {
+                continue;
+            }
+            $info = getDockerManagerContainerInfo($id);
+            if (empty($info)) {
+                continue;
+            }
+            $converted = dockerContainerToComposeService($info);
+            $name = $converted['name'];
+            $service = $converted['service'];
+            $origName = $converted['originalName'] ?? $name;
+
+            $serviceIcon = $info['Config']['Labels']['net.unraid.docker.icon'] ?? '';
+            $serviceWebui = $info['Config']['Labels']['net.unraid.docker.webui'] ?? '';
+            if ($serviceIcon) {
+                $service['icon'] = $serviceIcon;
+            }
+            if ($serviceWebui) {
+                $service['webui'] = $serviceWebui;
+            }
+
+            // Deduplicate service keys
+            $baseName = $name;
+            $append = 1;
+            while (isset($services[$name])) {
+                $name = $baseName . '_' . $append;
+                $append++;
+            }
+            $services[$name] = $service;
+
+            // Parse ports into structured data for the frontend
+            $parsedPorts = [];
+            if (!empty($service['ports'])) {
+                foreach ($service['ports'] as $portStr) {
+                    $parsedPorts[] = parsePortMapping($portStr);
+                }
+            }
+
+            // Build per-service metadata for the wizard
+            $meta = [
+                'originalName' => $origName,
+                'containerName' => $service['container_name'] ?? $name,
+                'image' => $service['image'] ?? '',
+                'ports' => $parsedPorts,
+                'exposedPorts' => array_keys($service['__exposed_ports'] ?? []),
+                'icon' => $serviceIcon,
+                'webui' => $serviceWebui,
+                'networkMode' => $service['network_mode'] ?? null,
+                'networks' => $service['networks'] ?? [],
+            ];
+
+            // Healthcheck info
+            if (!empty($service['healthcheck'])) {
+                $meta['healthcheck'] = $service['healthcheck'];
+                $meta['healthcheckSource'] = $service['__healthcheck_source'] ?? 'image';
+            } elseif (!empty($service['__guessed_healthcheck'])) {
+                $meta['guessedHealthcheck'] = $service['__guessed_healthcheck'];
+                $meta['healthcheckSource'] = 'auto';
+            } else {
+                $meta['healthcheckSource'] = 'none';
+            }
+
+            $servicesMeta[$name] = $meta;
+        }
+
+        if (empty($services)) {
+            echo json_encode(['result' => 'error', 'message' => 'No valid Docker Manager containers found for import']);
+            break;
+        }
+
+        // Detect port conflicts across all services
+        $portConflicts = detectPortConflicts($services);
+
+        // Get available Docker networks
+        $dockerNetworks = getDockerNetworks();
+
+        echo json_encode([
+            'result' => 'success',
+            'services' => $servicesMeta,
+            'portConflicts' => $portConflicts,
+            'networks' => $dockerNetworks,
+        ]);
+        break;
+
+    case 'finalizeImportCompose':
+        // Accept full wizard config and generate final compose YAML with validation
+        $containerIds = [];
+        if (!empty($_POST['containerIds'])) {
+            $data = json_decode($_POST['containerIds'], true);
+            if (is_array($data)) {
+                $containerIds = $data;
+            }
+        }
+        if (empty($containerIds)) {
+            echo json_encode(['result' => 'error', 'message' => 'No containers selected']);
+            break;
+        }
+
+        // Decode wizard configuration
+        $containerNames = [];
+        if (!empty($_POST['containerNames'])) {
+            $data = json_decode($_POST['containerNames'], true);
+            if (is_array($data)) {
+                $containerNames = $data;
+            }
+        }
+        $networkConfig = [];
+        if (!empty($_POST['networkConfig'])) {
+            $data = json_decode($_POST['networkConfig'], true);
+            if (is_array($data)) {
+                $networkConfig = $data;
+            }
+        }
+        $healthchecks = [];
+        if (!empty($_POST['healthchecks'])) {
+            $data = json_decode($_POST['healthchecks'], true);
+            if (is_array($data)) {
+                $healthchecks = $data;
+            }
+        }
+        $dependencies = [];
+        if (!empty($_POST['dependencies'])) {
+            $data = json_decode($_POST['dependencies'], true);
+            if (is_array($data)) {
+                $dependencies = $data;
+            }
+        }
+
+        // Re-fetch and convert containers (same as generateImportData)
+        $services = [];
+        foreach ($containerIds as $id) {
+            $id = trim($id);
+            if ($id === '') {
+                continue;
+            }
+            $info = getDockerManagerContainerInfo($id);
+            if (empty($info)) {
+                continue;
+            }
+            $converted = dockerContainerToComposeService($info);
+            $name = $converted['name'];
+            $service = $converted['service'];
+
+            $serviceIcon = $info['Config']['Labels']['net.unraid.docker.icon'] ?? '';
+            $serviceWebui = $info['Config']['Labels']['net.unraid.docker.webui'] ?? '';
+            if ($serviceIcon) {
+                $service['icon'] = $serviceIcon;
+            }
+            if ($serviceWebui) {
+                $service['webui'] = $serviceWebui;
+            }
+
+            $baseName = $name;
+            $append = 1;
+            while (isset($services[$name])) {
+                $name = $baseName . '_' . $append;
+                $append++;
+            }
+            $services[$name] = $service;
+        }
+
+        if (empty($services)) {
+            echo json_encode(['result' => 'error', 'message' => 'No valid containers found']);
+            break;
+        }
+
+        // Apply wizard configuration to services
+        $wizardConfig = [
+            'containerNames' => $containerNames,
+            'networkConfig' => $networkConfig,
+            'healthchecks' => $healthchecks,
+            'dependencies' => $dependencies,
+        ];
+
+        $env = dockerResolveEnvAndCompose($services);
+        $composeYml = dockerServicesToComposeYml($services, $wizardConfig);
+        $override = dockerAddOverrideIcons($services);
+
+        // Validate the generated YAML
+        $validation = ['valid' => true, 'errors' => []];
+        try {
+            if (function_exists('yaml_parse')) {
+                $parsed = yaml_parse($composeYml);
+                if ($parsed === false) {
+                    $validation['valid'] = false;
+                    $validation['errors'][] = 'Generated YAML is not valid';
+                }
+            }
+        } catch (\Throwable $e) {
+            $validation['valid'] = false;
+            $validation['errors'][] = 'YAML parse error: ' . $e->getMessage();
+        }
+
+        echo json_encode([
+            'result' => 'success',
+            'composeYml' => $composeYml,
+            'env' => $env,
+            'override' => $override,
+            'validation' => $validation,
+        ]);
+        break;
+
     case 'performImportTransfer':
         $stackName = trim($_POST['stackName'] ?? '');
         $stackDesc = trim($_POST['stackDesc'] ?? '');

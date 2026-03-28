@@ -2169,19 +2169,104 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
 
 
 
+    // =========================================================================
+    // Import Wizard — 6-Stage Flow
+    // =========================================================================
+
+    var importWizard = {
+        stage: 1,
+        containerIds: [],
+        containers: [],     // raw container list from getDockerContainersForImport
+        services: {},       // per-service metadata from generateImportData
+        portConflicts: [],
+        availableNetworks: [],
+        config: {
+            stackName: '',
+            stackDesc: '',
+            stopContainers: true,
+            removeContainers: true,
+            startStack: true,
+            containerNames: {},
+            networkConfig: {
+                stackNetwork: { enabled: true, name: '' },
+                externalNetworks: [],
+                perService: {}
+            },
+            healthchecks: {},
+            dependencies: {}
+        },
+        result: null        // finalizeImportCompose response
+    };
+
+    var WIZARD_STAGES = [
+        { num: 1, label: 'Select Containers' },
+        { num: 2, label: 'Select Options' },
+        { num: 3, label: 'Configure Containers' },
+        { num: 4, label: 'Configure Dependencies' },
+        { num: 5, label: 'Generating' },
+        { num: 6, label: 'Validate Compose' }
+    ];
+
+    function renderWizardStepper(activeStage) {
+        var html = '<div class="import-wizard-stepper">';
+        WIZARD_STAGES.forEach(function(s, i) {
+            var cls = 'import-wizard-step';
+            if (s.num < activeStage) cls += ' completed';
+            else if (s.num === activeStage) cls += ' active';
+            if (i > 0) html += '<div class="import-wizard-step-connector"></div>';
+            var icon = s.num < activeStage ? '<i class="fa fa-check"></i>' : s.num;
+            html += '<div class="' + cls + '"><span class="import-wizard-step-number">' + icon + '</span><span>' + composeEscapeHtml(s.label) + '</span></div>';
+        });
+        html += '</div>';
+        return html;
+    }
+
+    function wizardFooter(opts) {
+        var left = '';
+        var right = '';
+        if (opts.back) {
+            left = '<button class="editor-btn editor-btn-cancel" onclick="' + opts.back + '"><i class="fa fa-arrow-left"></i> Back</button>';
+        }
+        if (opts.cancel !== false) {
+            right += '<button class="editor-btn editor-btn-cancel" onclick="closeComposeImportModal()">Cancel</button>';
+        }
+        if (opts.next) {
+            var disabledAttr = opts.nextDisabled ? ' disabled' : '';
+            var label = opts.nextLabel || 'Next';
+            right += '<button class="editor-btn editor-btn-save-all" id="import-wizard-next-btn" onclick="' + opts.next + '"' + disabledAttr + '>' + composeEscapeHtml(label) + ' <i class="fa fa-arrow-right"></i></button>';
+        }
+        if (opts.action) {
+            right += '<button class="editor-btn editor-btn-save-all" onclick="' + opts.action + '">' + composeEscapeHtml(opts.actionLabel || 'Import') + '</button>';
+        }
+        return '<div style="display:flex;justify-content:space-between;align-items:center;width:100%;">' +
+               '<div>' + left + '</div><div style="display:flex;gap:8px;">' + right + '</div></div>';
+    }
+
     function importFromDockerManager() {
-        var modalHtml = `
-            <div id="compose-import-modal-overlay" class="compose-modal-overlay" style="display:flex;">
-                <div class="compose-modal" role="dialog" aria-modal="true" aria-labelledby="compose-import-modal-title" tabindex="-1" style="width:760px; max-width:95%;">
-                    <div class="compose-modal-header">
-                        <span id="compose-import-modal-title">Import from Docker Manager</span>
-                        <button type="button" class="editor-btn editor-btn-cancel" onclick="closeComposeImportModal()" aria-label="Close modal"><i class="fa fa-times"></i></button>
-                    </div>
-                    <div class="compose-modal-body" id="compose-import-modal-body">Loading Docker Manager containers...</div>
-                    <div class="compose-modal-footer" id="compose-import-modal-footer"></div>
-                </div>
-            </div>
-        `;
+        // Reset wizard state
+        importWizard = {
+            stage: 1, containerIds: [], containers: [], services: {},
+            portConflicts: [], availableNetworks: [],
+            config: {
+                stackName: '', stackDesc: '',
+                stopContainers: true, removeContainers: true, startStack: true,
+                containerNames: {},
+                networkConfig: { stackNetwork: { enabled: true, name: '' }, externalNetworks: [], perService: {} },
+                healthchecks: {}, dependencies: {}
+            },
+            result: null
+        };
+
+        var modalHtml = '<div id="compose-import-modal-overlay" class="compose-modal-overlay" style="display:flex;">' +
+            '<div class="compose-modal import-wizard-modal" role="dialog" aria-modal="true" aria-labelledby="compose-import-modal-title" tabindex="-1">' +
+            '<div class="compose-modal-header">' +
+            '<span id="compose-import-modal-title">Import from Docker Manager</span>' +
+            '<button type="button" class="editor-btn editor-btn-cancel" onclick="closeComposeImportModal()" aria-label="Close modal"><i class="fa fa-times"></i></button>' +
+            '</div>' +
+            '<div id="compose-import-stepper"></div>' +
+            '<div class="compose-modal-body" id="compose-import-modal-body">Loading Docker Manager containers...</div>' +
+            '<div class="compose-modal-footer" id="compose-import-modal-footer"></div>' +
+            '</div></div>';
 
         var existing = document.getElementById('compose-import-modal-overlay');
         if (existing) existing.remove();
@@ -2192,6 +2277,16 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
             if (overlay) overlay.remove();
         };
 
+        renderImportStage1();
+    }
+
+    // ── Stage 1: Select Containers ──────────────────────────────────────────
+    function renderImportStage1() {
+        importWizard.stage = 1;
+        $('#compose-import-stepper').html(renderWizardStepper(1));
+        $('#compose-import-modal-body').html('Loading Docker Manager containers...');
+        $('#compose-import-modal-footer').html('');
+
         $.post(caURL, {action: 'getDockerContainersForImport'}, function(data) {
             var response;
             try { response = JSON.parse(data); } catch (e) { response = { result:'error', message: 'Invalid response' }; }
@@ -2199,113 +2294,890 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
                 $('#compose-import-modal-body').html('<div style="color:#f44336">Failed to load containers.</div>');
                 return;
             }
-            var containers = response.containers || [];
-            if (!containers.length) {
+            importWizard.containers = response.containers || [];
+            if (!importWizard.containers.length) {
                 $('#compose-import-modal-body').html('<div>No Docker Manager containers found.</div>');
                 return;
             }
-            var rows = containers.map(function(ct) {
-                var iconHtml = '';
-                if (ct.Icon) {
-                    iconHtml = '<img src="' + composeEscapeHtml(ct.Icon) + '" style="height:20px;max-width:20px;" />';
-                }
-                var urlHtml = '';
-                if (ct.Url && /^https?:\/\//i.test(ct.Url)) {
-                    urlHtml = '<a href="' + composeEscapeHtml(ct.Url) + '" target="_blank">Link</a>';
-                }
+
+            var selectAll = '<label style="display:inline-flex;align-items:center;gap:6px;margin-bottom:10px;cursor:pointer;">' +
+                '<input type="checkbox" id="cm-import-select-all"> <strong>Select All</strong></label>';
+
+            var rows = importWizard.containers.map(function(ct) {
+                var iconHtml = ct.Icon ? '<img src="' + composeEscapeHtml(ct.Icon) + '" style="height:20px;max-width:20px;" />' : '';
+                var urlHtml = (ct.Url && /^https?:\/\//i.test(ct.Url)) ?
+                    '<a href="' + composeEscapeHtml(ct.Url) + '" target="_blank">Link</a>' : '';
                 return '<tr>' +
                     '<td><input type="checkbox" class="cm-import-container" value="' + composeEscapeHtml(ct.Id) + '"></td>' +
                     '<td>' + composeEscapeHtml(ct.Name) + '</td>' +
                     '<td>' + composeEscapeHtml(ct.Image) + '</td>' +
                     '<td>' + composeEscapeHtml(ct.Status) + '</td>' +
                     '<td>' + iconHtml + '</td>' +
-                    '<td>' + urlHtml + '</td>' +
-                    '</tr>';
+                    '<td>' + urlHtml + '</td></tr>';
             }).join('');
-            var table = '<div style="max-height:300px;overflow:auto;"><table class="tablesorter" style="width:100%"><thead><tr><th></th><th>Name</th><th>Image</th><th>Status</th><th>Icon</th><th>WebUI</th></tr></thead><tbody>' + rows + '</tbody></table></div>';
+            var table = selectAll + '<div style="max-height:350px;overflow:auto;"><table class="tablesorter" style="width:100%">' +
+                '<thead><tr><th></th><th>Name</th><th>Image</th><th>Status</th><th>Icon</th><th>WebUI</th></tr></thead>' +
+                '<tbody>' + rows + '</tbody></table></div>';
             $('#compose-import-modal-body').html(table);
-            $('#compose-import-modal-footer').html('<button class="editor-btn editor-btn-cancel" onclick="closeComposeImportModal()">Cancel</button><button class="editor-btn editor-btn-save-all" onclick="composeImportPreview()">Next</button>');
+            $('#compose-import-modal-footer').html(wizardFooter({
+                next: 'importWizardStage1Next()',
+                nextLabel: 'Next'
+            }));
+
+            // Select-all toggle
+            $('#cm-import-select-all').on('change', function() {
+                $('.cm-import-container').prop('checked', this.checked);
+            });
         }).fail(function() {
             $('#compose-import-modal-body').html('<div style="color:#f44336">Failed to contact server.</div>');
         });
     }
 
-    function composeImportPreview() {
+    function importWizardStage1Next() {
         var selected = [];
-        $('.cm-import-container:checked').each(function() {
-            selected.push(this.value);
-        });
+        $('.cm-import-container:checked').each(function() { selected.push(this.value); });
         if (!selected.length) {
             swal('No containers selected', 'Please select at least one container to import.', 'warning');
             return;
         }
+        importWizard.containerIds = selected;
 
-        $('#compose-import-modal-body').html('<div>Generating import preview...</div>');
-        $('#compose-import-modal-footer').empty();
+        // Fetch rich import data
+        $('#compose-import-modal-body').html('<div class="import-generating"><i class="fa fa-spinner fa-spin"></i><span>Analyzing containers...</span></div>');
+        $('#compose-import-modal-footer').html('');
 
-        $.post(caURL, {action: 'generateImportPreview', containerIds: JSON.stringify(selected)}, function(data) {
+        $.post(caURL, {action: 'generateImportData', containerIds: JSON.stringify(selected)}, function(data) {
             var response;
             try { response = JSON.parse(data); } catch (e) { response = { result:'error', message: 'Invalid response' }; }
             if (response.result !== 'success') {
-                $('#compose-import-modal-body').html('<div style="color:#f44336">' + (response.message || 'Failed to generate preview') + '</div>');
+                $('#compose-import-modal-body').html('<div style="color:#f44336">' + composeEscapeHtml(response.message || 'Failed to analyze containers') + '</div>');
+                $('#compose-import-modal-footer').html(wizardFooter({ back: 'renderImportStage1()' }));
                 return;
             }
-            var preview = '<div style="margin-bottom:10px;"><strong>Compose YAML preview</strong></div>' +
-                '<pre style="max-height:220px; overflow:auto; background:#1e1e1e; color:#ffffff; padding:10px; border-radius:6px;">' + composeEscapeHtml(response.composeYml) + '</pre>' +
-                '<div style="margin-top:10px;"><strong>.env preview (optional)</strong></div>' +
-                '<pre style="max-height:120px; overflow:auto; background:#1e1e1e; color:#ffffff; padding:10px; border-radius:6px;">' + composeEscapeHtml(response.env) + '</pre>' +
-                '<div style="margin-top:10px;"><strong>Override preview (icons/webui)</strong></div>' +
-                '<pre style="max-height:120px; overflow:auto; background:#1e1e1e; color:#ffffff; padding:10px; border-radius:6px;">' + composeEscapeHtml(response.override) + '</pre>';
+            importWizard.services = response.services || {};
+            importWizard.portConflicts = response.portConflicts || [];
+            importWizard.availableNetworks = response.networks || [];
 
-            preview += '<div style="margin-top:14px; font-weight:bold;">Stack name</div>' +
-                '<input type="text" id="cm-import-stack-name" placeholder="Import Stack Name" style="width:100%; margin-bottom:10px;">' +
-                '<div style="margin-bottom:5px; font-weight:bold;">Actions</div>' +
-                '<label style="display:block;margin-bottom:4px;"><input id="cm-import-stop-containers" type="checkbox" checked> Stop containers</label>' +
-                '<label style="display:block;margin-bottom:4px;"><input id="cm-import-remove-containers" type="checkbox" checked> Remove containers</label>' +
-                '<label style="display:block;margin-bottom:10px;"><input id="cm-import-start-stack" type="checkbox" checked> Start imported stack</label>';
-
-            $('#compose-import-modal-body').html(preview);
-            $('#compose-import-modal-footer').html('<button class="editor-btn editor-btn-cancel" onclick="closeComposeImportModal()">Cancel</button><button class="editor-btn editor-btn-save-all" onclick="composeImportPerform()">Import</button>');
-
-            $('#cm-import-remove-containers').on('change', function() {
-                if ($(this).is(':checked')) {
-                    $('#cm-import-stop-containers').prop('checked', true);
+            // Initialize defaults for wizard config from service data
+            var svcKeys = Object.keys(importWizard.services);
+            svcKeys.forEach(function(key) {
+                var meta = importWizard.services[key];
+                if (!importWizard.config.containerNames[key]) {
+                    importWizard.config.containerNames[key] = meta.containerName || key;
+                }
+                if (!importWizard.config.networkConfig.perService[key]) {
+                    importWizard.config.networkConfig.perService[key] = {
+                        networkMode: meta.networkMode || 'default',
+                        attachStackNet: !meta.networkMode || meta.networkMode === 'default' || meta.networkMode === 'bridge',
+                        externalNets: meta.networks || []
+                    };
+                }
+                // Initialize healthcheck from service data
+                if (!importWizard.config.healthchecks.hasOwnProperty(key)) {
+                    if (meta.healthcheck) {
+                        importWizard.config.healthchecks[key] = meta.healthcheck;
+                    } else if (meta.guessedHealthcheck) {
+                        importWizard.config.healthchecks[key] = meta.guessedHealthcheck;
+                    } else {
+                        importWizard.config.healthchecks[key] = null;
+                    }
+                }
+                if (!importWizard.config.dependencies[key]) {
+                    importWizard.config.dependencies[key] = [];
                 }
             });
-            $('#cm-import-stop-containers').on('change', function() {
-                if (!$(this).is(':checked')) {
-                    $('#cm-import-remove-containers').prop('checked', false);
-                }
-            });
 
-            window.__composeImportPayload = {composeYml: response.composeYml, env: response.env, override: response.override, containerIds: selected};
+            renderImportStage2();
         }).fail(function() {
-            $('#compose-import-modal-body').html('<div style="color:#f44336">Failed to contact server for preview.</div>');
+            $('#compose-import-modal-body').html('<div style="color:#f44336">Failed to contact server.</div>');
+            $('#compose-import-modal-footer').html(wizardFooter({ back: 'renderImportStage1()' }));
         });
     }
 
-    function composeImportPerform() {
-        var payload = window.__composeImportPayload || {};
-        var name = document.getElementById('cm-import-stack-name').value.trim();
-        if (!name) {
-            swal('Stack name required', 'Please provide a stack name to continue.', 'warning');
+    // ── Stage 2: Select Options ─────────────────────────────────────────────
+    function renderImportStage2() {
+        importWizard.stage = 2;
+        $('#compose-import-stepper').html(renderWizardStepper(2));
+
+        var cfg = importWizard.config;
+        var netCfg = cfg.networkConfig;
+
+        // Sanitize stack name preview helper
+        function sanitizeName(name) {
+            return name.toLowerCase().replace(/[^a-z0-9_-]/g, '_').replace(/^_+|_+$/g, '');
+        }
+
+        var html = '';
+
+        // Stack name
+        html += '<div class="import-field" style="margin-bottom:16px;">' +
+            '<label><strong>Stack Name</strong> <span style="color:var(--status-error);">*</span></label>' +
+            '<input type="text" id="iw-stack-name" value="' + composeEscapeHtml(cfg.stackName) + '" placeholder="my-stack">' +
+            '<div id="iw-stack-name-preview" style="font-size:0.82rem;color:var(--alt-text-color);margin-top:4px;"></div>' +
+            '</div>';
+
+        // Stack Network
+        var stackNetChecked = netCfg.stackNetwork.enabled ? ' checked' : '';
+        html += '<div style="margin-bottom:16px;padding:14px;background:var(--dynamix-tablesorter-tbody-row-alt-bg-color);border:1px solid var(--border-color);border-radius:6px;">' +
+            '<label style="display:flex;align-items:center;gap:8px;font-weight:600;margin-bottom:10px;cursor:pointer;">' +
+            '<input type="checkbox" id="iw-stack-net-enabled"' + stackNetChecked + '> Create Stack Network</label>' +
+            '<div id="iw-stack-net-details"' + (netCfg.stackNetwork.enabled ? '' : ' style="display:none;"') + '>' +
+            '<div class="import-field-row">' +
+            '<div class="import-field"><label>Network Name</label>' +
+            '<input type="text" id="iw-stack-net-name" value="' + composeEscapeHtml(netCfg.stackNetwork.name) + '" placeholder="stack_net"></div>' +
+            '<div class="import-field"><label>Driver</label>' +
+            '<input type="text" value="bridge" disabled style="opacity:0.6;"></div>' +
+            '</div></div></div>';
+
+        // External Networks
+        var existingNets = importWizard.availableNetworks.filter(function(n) {
+            return n.name !== 'bridge' && n.name !== 'host' && n.name !== 'none';
+        });
+        var selectedExt = netCfg.externalNetworks || [];
+        html += '<div style="margin-bottom:16px;padding:14px;background:var(--dynamix-tablesorter-tbody-row-alt-bg-color);border:1px solid var(--border-color);border-radius:6px;">' +
+            '<div style="font-weight:600;margin-bottom:10px;">External Networks</div>';
+        if (existingNets.length) {
+            html += '<div class="import-net-checks" id="iw-ext-nets">';
+            existingNets.forEach(function(net) {
+                var checked = selectedExt.indexOf(net.name) >= 0 ? ' checked' : '';
+                html += '<label><input type="checkbox" class="iw-ext-net-cb" value="' + composeEscapeHtml(net.name) + '"' + checked + '> ' +
+                    composeEscapeHtml(net.name) + ' <small>(' + composeEscapeHtml(net.driver) + ')</small></label>';
+            });
+            html += '</div>';
+        } else {
+            html += '<div style="color:var(--alt-text-color);font-size:0.9rem;">No custom Docker networks found.</div>';
+        }
+        html += '<div class="import-ext-net-add">' +
+            '<input type="text" id="iw-ext-net-custom" placeholder="Custom network name">' +
+            '<button type="button" onclick="iwAddCustomNetwork()">Add</button>' +
+            '</div></div>';
+
+        // Container handling
+        html += '<div style="padding:14px;background:var(--dynamix-tablesorter-tbody-row-alt-bg-color);border:1px solid var(--border-color);border-radius:6px;">' +
+            '<div style="font-weight:600;margin-bottom:10px;">After Import</div>' +
+            '<label style="display:block;margin-bottom:6px;cursor:pointer;"><input type="checkbox" id="iw-stop-containers"' + (cfg.stopContainers ? ' checked' : '') + '> Stop original containers</label>' +
+            '<label style="display:block;margin-bottom:6px;cursor:pointer;"><input type="checkbox" id="iw-remove-containers"' + (cfg.removeContainers ? ' checked' : '') + '> Remove original containers</label>' +
+            '<label style="display:block;cursor:pointer;"><input type="checkbox" id="iw-start-stack"' + (cfg.startStack ? ' checked' : '') + '> Start imported stack</label>' +
+            '</div>';
+
+        $('#compose-import-modal-body').html(html);
+        $('#compose-import-modal-footer').html(wizardFooter({
+            back: 'renderImportStage1()',
+            next: 'importWizardStage2Next()'
+        }));
+
+        // Wire up events
+        $('#iw-stack-name').on('input', function() {
+            var val = this.value;
+            var san = sanitizeName(val);
+            $('#iw-stack-name-preview').text(san ? 'Folder: ' + san : '');
+            // Update default stack net name
+            if ($('#iw-stack-net-name').val() === '' || $('#iw-stack-net-name').data('auto')) {
+                $('#iw-stack-net-name').val(san ? san + '_net' : '').data('auto', true);
+            }
+        }).trigger('input');
+        $('#iw-stack-net-name').on('input', function() { $(this).data('auto', false); });
+        $('#iw-stack-net-enabled').on('change', function() {
+            $('#iw-stack-net-details').toggle(this.checked);
+        });
+        $('#iw-remove-containers').on('change', function() {
+            if (this.checked) $('#iw-stop-containers').prop('checked', true);
+        });
+        $('#iw-stop-containers').on('change', function() {
+            if (!this.checked) $('#iw-remove-containers').prop('checked', false);
+        });
+    }
+
+    function iwAddCustomNetwork() {
+        var name = document.getElementById('iw-ext-net-custom').value.trim();
+        if (!name) return;
+        // Check if already exists
+        var exists = false;
+        $('.iw-ext-net-cb').each(function() { if (this.value === name) exists = true; });
+        if (exists) { document.getElementById('iw-ext-net-custom').value = ''; return; }
+        var label = '<label><input type="checkbox" class="iw-ext-net-cb" value="' + composeEscapeHtml(name) + '" checked> ' +
+            composeEscapeHtml(name) + ' <small>(custom)</small></label>';
+        if ($('#iw-ext-nets').length) {
+            $('#iw-ext-nets').append(label);
+        } else {
+            // Create the container if it didn't exist
+            var container = '<div class="import-net-checks" id="iw-ext-nets">' + label + '</div>';
+            $('.import-ext-net-add').before(container);
+        }
+        document.getElementById('iw-ext-net-custom').value = '';
+    }
+
+    function importWizardStage2Next() {
+        var cfg = importWizard.config;
+        cfg.stackName = document.getElementById('iw-stack-name').value.trim();
+        if (!cfg.stackName) {
+            swal('Stack name required', 'Please enter a stack name.', 'warning');
             return;
         }
 
-        var stopContainers = document.getElementById('cm-import-stop-containers').checked ? '1' : '0';
-        var removeContainers = document.getElementById('cm-import-remove-containers').checked ? '1' : '0';
-        var startStack = document.getElementById('cm-import-start-stack').checked ? '1' : '0';
+        var netCfg = cfg.networkConfig;
+        netCfg.stackNetwork.enabled = document.getElementById('iw-stack-net-enabled').checked;
+        netCfg.stackNetwork.name = document.getElementById('iw-stack-net-name').value.trim();
+
+        var extNets = [];
+        $('.iw-ext-net-cb:checked').each(function() { extNets.push(this.value); });
+        netCfg.externalNetworks = extNets;
+
+        cfg.stopContainers = document.getElementById('iw-stop-containers').checked;
+        cfg.removeContainers = document.getElementById('iw-remove-containers').checked;
+        cfg.startStack = document.getElementById('iw-start-stack').checked;
+
+        renderImportStage3();
+    }
+
+    // ── Stage 3: Configure Containers ───────────────────────────────────────
+    function renderImportStage3() {
+        importWizard.stage = 3;
+        $('#compose-import-stepper').html(renderWizardStepper(3));
+
+        var cfg = importWizard.config;
+        var services = importWizard.services;
+        var svcKeys = Object.keys(services);
+        var netCfg = cfg.networkConfig;
+        var html = '';
+
+        // Port conflict banner
+        if (importWizard.portConflicts.length) {
+            html += '<div class="import-conflict-banner"><i class="fa fa-exclamation-triangle"></i><div>';
+            importWizard.portConflicts.forEach(function(c) {
+                html += '<div>Host port <strong>' + composeEscapeHtml(c.hostPort + '/' + c.protocol) +
+                    '</strong> is mapped by: ' + c.services.map(composeEscapeHtml).join(', ') + '</div>';
+            });
+            html += '</div></div>';
+        }
+
+        // Build conflict lookup for ports
+        var portConflictMap = {};
+        importWizard.portConflicts.forEach(function(c) {
+            c.services.forEach(function(svc) {
+                if (!portConflictMap[svc]) portConflictMap[svc] = [];
+                portConflictMap[svc].push(c);
+            });
+        });
+
+        svcKeys.forEach(function(key, idx) {
+            var meta = services[key];
+            var cName = cfg.containerNames[key] || meta.containerName || key;
+            var perSvc = netCfg.perService[key] || {};
+            var netMode = perSvc.networkMode || 'default';
+            var isNetModeRestricted = (netMode === 'host' || netMode === 'none');
+            var attachStackNet = perSvc.attachStackNet !== false;
+            var svcExtNets = perSvc.externalNets || [];
+            var hc = cfg.healthchecks[key];
+            var hcSource = meta.healthcheckSource || 'none';
+            if (hc && hcSource === 'none') hcSource = 'auto';
+
+            // Card
+            var expanded = idx === 0 ? ' expanded' : '';
+            html += '<div class="import-service-card' + expanded + '" data-service="' + composeEscapeHtml(key) + '">';
+
+            // Header
+            var iconImg = meta.icon ? '<img class="import-service-card-icon" src="' + composeEscapeHtml(meta.icon) + '">' : '';
+            html += '<div class="import-service-card-header" onclick="iwToggleCard(this)">' +
+                iconImg +
+                '<span class="import-service-card-title">' + composeEscapeHtml(key) + '</span>' +
+                '<span class="import-service-card-image">' + composeEscapeHtml(meta.image) + '</span>' +
+                '<i class="import-service-card-toggle fa fa-chevron-right"></i>' +
+                '</div>';
+
+            // Body
+            html += '<div class="import-service-card-body">';
+
+            // Row 1: Container name + network mode
+            html += '<div class="import-field-row">';
+            html += '<div class="import-field"><label>Container Name</label>' +
+                '<input type="text" class="iw-container-name" data-service="' + composeEscapeHtml(key) + '" value="' + composeEscapeHtml(cName) + '">' +
+                '<div class="import-field-error" id="iw-name-error-' + composeEscapeHtml(key) + '"></div></div>';
+            html += '<div class="import-field"><label>Network Mode</label>' +
+                '<select class="iw-net-mode" data-service="' + composeEscapeHtml(key) + '">' +
+                '<option value="default"' + (netMode === 'default' ? ' selected' : '') + '>Default (compose managed)</option>' +
+                '<option value="bridge"' + (netMode === 'bridge' ? ' selected' : '') + '>Bridge</option>' +
+                '<option value="host"' + (netMode === 'host' ? ' selected' : '') + '>Host</option>' +
+                '<option value="none"' + (netMode === 'none' ? ' selected' : '') + '>None</option>' +
+                '</select></div>';
+            html += '</div>';
+
+            // Row 2: Network attachments
+            var stackNetAvailable = netCfg.stackNetwork.enabled && netCfg.stackNetwork.name;
+            var hasExtNets = netCfg.externalNetworks.length > 0;
+            if (stackNetAvailable || hasExtNets) {
+                html += '<div class="import-field" style="margin-bottom:14px;"><label>Network Attachments</label>';
+                html += '<div class="import-net-checks iw-svc-nets" data-service="' + composeEscapeHtml(key) + '">';
+                if (stackNetAvailable) {
+                    var stackChecked = (attachStackNet && !isNetModeRestricted) ? ' checked' : '';
+                    var stackDisabled = isNetModeRestricted ? ' disabled' : '';
+                    var stackDisabledCls = isNetModeRestricted ? ' class="disabled"' : '';
+                    html += '<label' + stackDisabledCls + '><input type="checkbox" class="iw-attach-stack" data-service="' + composeEscapeHtml(key) + '"' + stackChecked + stackDisabled + '> ' +
+                        composeEscapeHtml(netCfg.stackNetwork.name) + ' <small>(stack)</small></label>';
+                }
+                netCfg.externalNetworks.forEach(function(en) {
+                    var extChecked = (svcExtNets.indexOf(en) >= 0 && !isNetModeRestricted) ? ' checked' : '';
+                    var extDisabled = isNetModeRestricted ? ' disabled' : '';
+                    var extDisabledCls = isNetModeRestricted ? ' class="disabled"' : '';
+                    html += '<label' + extDisabledCls + '><input type="checkbox" class="iw-attach-ext" data-service="' + composeEscapeHtml(key) + '" value="' + composeEscapeHtml(en) + '"' + extChecked + extDisabled + '> ' +
+                        composeEscapeHtml(en) + ' <small>(external)</small></label>';
+                });
+                html += '</div></div>';
+            }
+
+            // Ports (read-only)
+            if (meta.ports && meta.ports.length) {
+                var conflicts = portConflictMap[key] || [];
+                html += '<div class="import-field" style="margin-bottom:14px;"><label>Ports</label>';
+                html += '<div class="import-port-list">';
+                meta.ports.forEach(function(p) {
+                    var portStr = (p.hostIp && p.hostIp !== '0.0.0.0' ? p.hostIp + ':' : '') + (p.hostPort ? p.hostPort + ':' : '') + p.containerPort + '/' + p.protocol;
+                    var isConflict = false;
+                    conflicts.forEach(function(c) {
+                        if (c.hostPort === p.hostPort && c.protocol === p.protocol) isConflict = true;
+                    });
+                    html += '<span class="import-port-tag' + (isConflict ? ' conflict' : '') + '">' + composeEscapeHtml(portStr);
+                    if (isConflict) {
+                        var otherSvcs = [];
+                        conflicts.forEach(function(c) {
+                            if (c.hostPort === p.hostPort && c.protocol === p.protocol) {
+                                c.services.forEach(function(s) { if (s !== key) otherSvcs.push(s); });
+                            }
+                        });
+                        html += ' <span class="import-conflict-badge" title="Conflicts with: ' + otherSvcs.map(composeEscapeHtml).join(', ') + '"><i class="fa fa-exclamation-triangle"></i></span>';
+                    }
+                    html += '</span>';
+                });
+                html += '</div></div>';
+            }
+
+            // Healthcheck section
+            var hcSourceLabel = hcSource === 'image' ? 'From Image' : (hcSource === 'auto' ? 'Auto-Detected' : 'None');
+            var hcSourceClass = hcSource === 'image' ? 'from-image' : (hcSource === 'auto' ? 'auto-detected' : 'none');
+            var hcExpanded = hc ? ' expanded' : '';
+            html += '<div class="import-healthcheck-section' + hcExpanded + '" data-service="' + composeEscapeHtml(key) + '">';
+            html += '<div class="import-healthcheck-header" onclick="iwToggleHealthcheck(this)">' +
+                '<span><i class="fa fa-heartbeat"></i> Healthcheck <span class="import-healthcheck-source ' + hcSourceClass + '">' + hcSourceLabel + '</span></span>' +
+                '<i class="fa fa-chevron-right import-service-card-toggle"></i></div>';
+
+            html += '<div class="import-healthcheck-fields">';
+
+            var testCmd = '';
+            if (hc && hc.test) {
+                testCmd = Array.isArray(hc.test) ? (hc.test.length > 1 ? hc.test.slice(1).join(' ') : hc.test[0]) : hc.test;
+            }
+            html += '<div class="import-field full-width"><label>Test Command</label>' +
+                '<input type="text" class="iw-hc-test" data-service="' + composeEscapeHtml(key) + '" value="' + composeEscapeHtml(testCmd) + '" placeholder="curl -f http://localhost/ || exit 1"></div>';
+            html += '<div class="import-field"><label>Interval</label>' +
+                '<input type="text" class="iw-hc-interval" data-service="' + composeEscapeHtml(key) + '" value="' + composeEscapeHtml(hc ? (hc.interval || '30s') : '30s') + '"></div>';
+            html += '<div class="import-field"><label>Timeout</label>' +
+                '<input type="text" class="iw-hc-timeout" data-service="' + composeEscapeHtml(key) + '" value="' + composeEscapeHtml(hc ? (hc.timeout || '10s') : '10s') + '"></div>';
+            html += '<div class="import-field"><label>Retries</label>' +
+                '<input type="number" class="iw-hc-retries" data-service="' + composeEscapeHtml(key) + '" value="' + (hc ? (hc.retries || 3) : 3) + '" min="1" max="20"></div>';
+            html += '<div class="import-field"><label>Start Period</label>' +
+                '<input type="text" class="iw-hc-start-period" data-service="' + composeEscapeHtml(key) + '" value="' + composeEscapeHtml(hc ? (hc.start_period || '10s') : '10s') + '"></div>';
+            html += '<div class="import-field"><label>&nbsp;</label>' +
+                '<button type="button" class="editor-btn editor-btn-cancel" style="padding:6px 14px;font-size:0.85rem;" onclick="iwRemoveHealthcheck(\'' + composeEscapeHtml(key) + '\')"><i class="fa fa-trash"></i> Remove</button></div>';
+            html += '</div></div>'; // healthcheck section
+
+            html += '</div></div>'; // card body + card
+        });
+
+        $('#compose-import-modal-body').html(html);
+        $('#compose-import-modal-footer').html(wizardFooter({
+            back: 'iwSaveStage3(); renderImportStage2()',
+            next: 'importWizardStage3Next()',
+            nextDisabled: false
+        }));
+
+        // Wire events
+        $('.iw-container-name').on('input', iwValidateContainerNames);
+        $('.iw-net-mode').on('change', function() {
+            var svc = $(this).data('service');
+            var mode = this.value;
+            var restricted = (mode === 'host' || mode === 'none');
+            var $nets = $('.iw-svc-nets[data-service="' + svc + '"]');
+            $nets.find('input[type="checkbox"]').prop('disabled', restricted);
+            if (restricted) {
+                $nets.find('input[type="checkbox"]').prop('checked', false);
+                $nets.find('label').addClass('disabled');
+            } else {
+                $nets.find('label').removeClass('disabled');
+            }
+        });
+        iwValidateContainerNames();
+    }
+
+    function iwToggleCard(headerEl) {
+        $(headerEl).closest('.import-service-card').toggleClass('expanded');
+    }
+
+    function iwToggleHealthcheck(headerEl) {
+        $(headerEl).closest('.import-healthcheck-section').toggleClass('expanded');
+    }
+
+    function iwRemoveHealthcheck(svc) {
+        importWizard.config.healthchecks[svc] = null;
+        var $section = $('.import-healthcheck-section[data-service="' + svc + '"]');
+        $section.removeClass('expanded');
+        $section.find('.iw-hc-test').val('');
+        $section.find('.import-healthcheck-source').text('None').attr('class', 'import-healthcheck-source none');
+    }
+
+    function iwValidateContainerNames() {
+        var names = {};
+        var hasDuplicates = false;
+        $('.iw-container-name').each(function() {
+            var svc = $(this).data('service');
+            var val = this.value.trim();
+            if (!names[val]) names[val] = [];
+            names[val].push(svc);
+        });
+        $('.iw-container-name').each(function() {
+            var svc = $(this).data('service');
+            var val = this.value.trim();
+            var $err = $('#iw-name-error-' + svc);
+            if (val === '') {
+                $(this).addClass('import-name-error');
+                $err.text('Container name cannot be empty');
+                hasDuplicates = true;
+            } else if (names[val].length > 1) {
+                $(this).addClass('import-name-error');
+                $err.text('Duplicate name — conflicts with: ' + names[val].filter(function(s) { return s !== svc; }).join(', '));
+                hasDuplicates = true;
+            } else {
+                $(this).removeClass('import-name-error');
+                $err.text('');
+            }
+        });
+        $('#import-wizard-next-btn').prop('disabled', hasDuplicates);
+    }
+
+    function iwSaveStage3() {
+        var cfg = importWizard.config;
+        // Save container names
+        $('.iw-container-name').each(function() {
+            cfg.containerNames[$(this).data('service')] = this.value.trim();
+        });
+        // Save network modes & attachments
+        $('.iw-net-mode').each(function() {
+            var svc = $(this).data('service');
+            if (!cfg.networkConfig.perService[svc]) cfg.networkConfig.perService[svc] = {};
+            cfg.networkConfig.perService[svc].networkMode = this.value;
+        });
+        $('.iw-attach-stack').each(function() {
+            var svc = $(this).data('service');
+            if (!cfg.networkConfig.perService[svc]) cfg.networkConfig.perService[svc] = {};
+            cfg.networkConfig.perService[svc].attachStackNet = this.checked;
+        });
+        Object.keys(importWizard.services).forEach(function(svc) {
+            var extNets = [];
+            $('.iw-attach-ext[data-service="' + svc + '"]:checked').each(function() { extNets.push(this.value); });
+            if (!cfg.networkConfig.perService[svc]) cfg.networkConfig.perService[svc] = {};
+            cfg.networkConfig.perService[svc].externalNets = extNets;
+        });
+        // Save healthchecks
+        Object.keys(importWizard.services).forEach(function(svc) {
+            var testCmd = $('.iw-hc-test[data-service="' + svc + '"]').val();
+            if (testCmd && testCmd.trim()) {
+                cfg.healthchecks[svc] = {
+                    test: ['CMD-SHELL', testCmd.trim()],
+                    interval: $('.iw-hc-interval[data-service="' + svc + '"]').val() || '30s',
+                    timeout: $('.iw-hc-timeout[data-service="' + svc + '"]').val() || '10s',
+                    retries: parseInt($('.iw-hc-retries[data-service="' + svc + '"]').val()) || 3,
+                    start_period: $('.iw-hc-start-period[data-service="' + svc + '"]').val() || '10s'
+                };
+            } else if (cfg.healthchecks[svc] !== null) {
+                // Only nullify if not already explicitly removed
+                cfg.healthchecks[svc] = null;
+            }
+        });
+    }
+
+    function importWizardStage3Next() {
+        iwSaveStage3();
+        // Check for name validation
+        var hasDuplicates = false;
+        var names = {};
+        Object.keys(importWizard.config.containerNames).forEach(function(k) {
+            var n = importWizard.config.containerNames[k];
+            if (!n || names[n]) hasDuplicates = true;
+            names[n] = true;
+        });
+        if (hasDuplicates) {
+            swal('Name conflicts', 'Please resolve container name conflicts before continuing.', 'warning');
+            return;
+        }
+        renderImportStage4();
+    }
+
+    // ── Stage 4: Configure Dependencies ─────────────────────────────────────
+    function renderImportStage4() {
+        importWizard.stage = 4;
+        $('#compose-import-stepper').html(renderWizardStepper(4));
+
+        var svcKeys = Object.keys(importWizard.services);
+        var deps = importWizard.config.dependencies;
+        var html = '';
+
+        if (svcKeys.length < 2) {
+            html += '<div style="text-align:center;padding:40px 20px;color:var(--alt-text-color);font-size:1.05rem;">' +
+                '<i class="fa fa-link" style="font-size:2rem;margin-bottom:12px;display:block;opacity:0.4;"></i>' +
+                'Single container — no dependencies to configure.</div>';
+            $('#compose-import-modal-body').html(html);
+            $('#compose-import-modal-footer').html(wizardFooter({
+                back: 'renderImportStage3()',
+                next: 'importWizardStage4Next()',
+                nextLabel: 'Next'
+            }));
+            return;
+        }
+
+        html += '<div id="iw-dep-cycle-error" class="import-dep-cycle-error" style="display:none;"></div>';
+
+        html += '<table class="import-deps-table"><thead><tr><th>Service</th><th>Depends On</th><th></th></tr></thead><tbody>';
+        svcKeys.forEach(function(key) {
+            var svcDeps = deps[key] || [];
+            html += '<tr><td style="font-weight:600;">' + composeEscapeHtml(key) + '</td>';
+            html += '<td><div class="iw-dep-entries" data-service="' + composeEscapeHtml(key) + '">';
+            if (svcDeps.length) {
+                svcDeps.forEach(function(d, di) {
+                    html += iwRenderDepRow(key, svcKeys, d, di);
+                });
+            }
+            html += '</div>';
+            html += '<button type="button" class="import-dep-add" onclick="iwAddDep(\'' + composeEscapeHtml(key) + '\')"><i class="fa fa-plus"></i> Add Dependency</button>';
+            html += '</td><td></td></tr>';
+        });
+        html += '</tbody></table>';
+
+        html += '<div id="iw-startup-order" class="import-startup-order" style="display:none;"></div>';
+
+        $('#compose-import-modal-body').html(html);
+        $('#compose-import-modal-footer').html(wizardFooter({
+            back: 'iwSaveDeps(); renderImportStage3()',
+            next: 'importWizardStage4Next()'
+        }));
+
+        iwWireDepEvents($('#compose-import-modal-body'));
+        iwCheckDependencyCycles();
+    }
+
+    function iwRenderDepRow(svc, allKeys, dep, index) {
+        var targetSvc = dep ? dep.service : '';
+        var condition = dep ? dep.condition : 'service_started';
+        var otherKeys = allKeys.filter(function(k) { return k !== svc; });
+        var html = '<div class="import-dep-row" data-index="' + index + '">';
+        html += '<select class="iw-dep-target" data-service="' + composeEscapeHtml(svc) + '" data-index="' + index + '">';
+        html += '<option value="">-- Select --</option>';
+        otherKeys.forEach(function(k) {
+            html += '<option value="' + composeEscapeHtml(k) + '"' + (k === targetSvc ? ' selected' : '') + '>' + composeEscapeHtml(k) + '</option>';
+        });
+        html += '</select>';
+
+        var hasHC = !!importWizard.config.healthchecks[targetSvc];
+        html += '<select class="iw-dep-condition" data-service="' + composeEscapeHtml(svc) + '" data-index="' + index + '">';
+        html += '<option value="service_started"' + (condition === 'service_started' ? ' selected' : '') + '>service_started</option>';
+        html += '<option value="service_healthy"' + (condition === 'service_healthy' ? ' selected' : '') + (!hasHC && condition !== 'service_healthy' ? ' disabled' : '') + '>service_healthy' + (!hasHC ? ' (no healthcheck)' : '') + '</option>';
+        html += '</select>';
+
+        html += '<button type="button" class="import-dep-remove" onclick="iwRemoveDep(\'' + composeEscapeHtml(svc) + '\',' + index + ')"><i class="fa fa-times"></i></button>';
+        html += '</div>';
+        return html;
+    }
+
+    function iwUpdateConditionDropdown($row) {
+        var targetSvc = $row.find('.iw-dep-target').val();
+        var $cond = $row.find('.iw-dep-condition');
+        var hasHC = !!(targetSvc && importWizard.config.healthchecks[targetSvc]);
+        var $healthy = $cond.find('option[value="service_healthy"]');
+        if (hasHC) {
+            $healthy.prop('disabled', false).text('service_healthy');
+        } else {
+            $healthy.prop('disabled', true).text('service_healthy (no healthcheck)');
+            if ($cond.val() === 'service_healthy') {
+                $cond.val('service_started');
+            }
+        }
+    }
+
+    function iwWireDepEvents($container) {
+        $container.find('.iw-dep-target').off('change.iw').on('change.iw', function() {
+            iwUpdateConditionDropdown($(this).closest('.import-dep-row'));
+            iwCheckDependencyCycles();
+        });
+        $container.find('.iw-dep-condition').off('change.iw').on('change.iw', function() {
+            iwCheckDependencyCycles();
+        });
+    }
+
+    function iwAddDep(svc) {
+        var $entries = $('.iw-dep-entries[data-service="' + svc + '"]');
+        var allKeys = Object.keys(importWizard.services);
+        var index = $entries.find('.import-dep-row').length;
+        $entries.append(iwRenderDepRow(svc, allKeys, null, index));
+        iwWireDepEvents($entries);
+    }
+
+    function iwRemoveDep(svc, index) {
+        var $entries = $('.iw-dep-entries[data-service="' + svc + '"]');
+        $entries.find('.import-dep-row[data-index="' + index + '"]').remove();
+        iwCheckDependencyCycles();
+    }
+
+    function iwCollectDeps() {
+        var deps = {};
+        Object.keys(importWizard.services).forEach(function(svc) {
+            deps[svc] = [];
+            $('.iw-dep-entries[data-service="' + svc + '"] .import-dep-row').each(function() {
+                var target = $(this).find('.iw-dep-target').val();
+                var condition = $(this).find('.iw-dep-condition').val();
+                if (target) {
+                    deps[svc].push({ service: target, condition: condition || 'service_started' });
+                }
+            });
+        });
+        return deps;
+    }
+
+    function iwSaveDeps() {
+        importWizard.config.dependencies = iwCollectDeps();
+    }
+
+    function iwCheckDependencyCycles() {
+        var deps = iwCollectDeps();
+        var cycle = iwDetectCycle(deps);
+        var $err = $('#iw-dep-cycle-error');
+        var $order = $('#iw-startup-order');
+        var $next = $('#import-wizard-next-btn');
+
+        if (cycle) {
+            $err.text('Dependency cycle detected: ' + cycle.join(' → ')).show();
+            $next.prop('disabled', true);
+            $order.hide();
+        } else {
+            $err.hide();
+            $next.prop('disabled', false);
+            // Show startup order via topological sort
+            var order = iwTopologicalSort(deps);
+            if (order.length > 1) {
+                $order.html('<span>Startup order:</span> ' + order.map(composeEscapeHtml).join(' → ')).show();
+            } else {
+                $order.hide();
+            }
+        }
+    }
+
+    /**
+     * Detect cycles in the dependency graph using DFS.
+     * Returns the cycle path as an array, or null if no cycle.
+     */
+    function iwDetectCycle(deps) {
+        var WHITE = 0, GRAY = 1, BLACK = 2;
+        var color = {};
+        var parent = {};
+        var allNodes = Object.keys(deps);
+        allNodes.forEach(function(n) { color[n] = WHITE; });
+
+        for (var i = 0; i < allNodes.length; i++) {
+            if (color[allNodes[i]] === WHITE) {
+                var result = dfs(allNodes[i]);
+                if (result) return result;
+            }
+        }
+        return null;
+
+        function dfs(u) {
+            color[u] = GRAY;
+            var edges = (deps[u] || []).map(function(d) { return d.service; }).filter(function(s) { return s; });
+            for (var j = 0; j < edges.length; j++) {
+                var v = edges[j];
+                if (color[v] === GRAY) {
+                    // Found cycle — reconstruct path
+                    var path = [v, u];
+                    var cur = u;
+                    while (cur !== v && parent[cur]) {
+                        cur = parent[cur];
+                        path.push(cur);
+                    }
+                    return path.reverse();
+                }
+                if (color[v] === WHITE) {
+                    parent[v] = u;
+                    var res = dfs(v);
+                    if (res) return res;
+                }
+            }
+            color[u] = BLACK;
+            return null;
+        }
+    }
+
+    /**
+     * Topological sort via Kahn's algorithm. Returns ordered array of service names.
+     */
+    function iwTopologicalSort(deps) {
+        var inDegree = {};
+        var adjList = {};
+        var allNodes = Object.keys(deps);
+        allNodes.forEach(function(n) { inDegree[n] = 0; adjList[n] = []; });
+        allNodes.forEach(function(n) {
+            (deps[n] || []).forEach(function(d) {
+                if (d.service && adjList[d.service]) {
+                    adjList[d.service].push(n);
+                    inDegree[n] = (inDegree[n] || 0) + 1;
+                }
+            });
+        });
+        var queue = allNodes.filter(function(n) { return inDegree[n] === 0; });
+        var order = [];
+        while (queue.length) {
+            var node = queue.shift();
+            order.push(node);
+            (adjList[node] || []).forEach(function(neighbor) {
+                inDegree[neighbor]--;
+                if (inDegree[neighbor] === 0) queue.push(neighbor);
+            });
+        }
+        return order;
+    }
+
+    function importWizardStage4Next() {
+        iwSaveDeps();
+        var cycle = iwDetectCycle(importWizard.config.dependencies);
+        if (cycle) {
+            swal('Dependency cycle', 'Please resolve the dependency cycle before continuing.', 'warning');
+            return;
+        }
+        renderImportStage5();
+    }
+
+    // ── Stage 5: Generating ─────────────────────────────────────────────────
+    function renderImportStage5() {
+        importWizard.stage = 5;
+        $('#compose-import-stepper').html(renderWizardStepper(5));
+        $('#compose-import-modal-body').html(
+            '<div class="import-generating"><i class="fa fa-spinner fa-spin"></i><span>Generating compose configuration...</span></div>'
+        );
+        $('#compose-import-modal-footer').html('');
+
+        var cfg = importWizard.config;
+        $.post(caURL, {
+            action: 'finalizeImportCompose',
+            containerIds: JSON.stringify(importWizard.containerIds),
+            containerNames: JSON.stringify(cfg.containerNames),
+            networkConfig: JSON.stringify(cfg.networkConfig),
+            healthchecks: JSON.stringify(cfg.healthchecks),
+            dependencies: JSON.stringify(cfg.dependencies)
+        }, function(data) {
+            var response;
+            try { response = JSON.parse(data); } catch (e) { response = { result:'error', message: 'Invalid response' }; }
+            if (response.result !== 'success') {
+                $('#compose-import-modal-body').html('<div style="color:#f44336;padding:20px;">' +
+                    composeEscapeHtml(response.message || 'Failed to generate compose configuration') + '</div>');
+                $('#compose-import-modal-footer').html(wizardFooter({ back: 'renderImportStage4()' }));
+                return;
+            }
+            importWizard.result = response;
+            renderImportStage6();
+        }).fail(function() {
+            $('#compose-import-modal-body').html('<div style="color:#f44336;padding:20px;">Communication error</div>');
+            $('#compose-import-modal-footer').html(wizardFooter({ back: 'renderImportStage4()' }));
+        });
+    }
+
+    // ── Stage 6: Validate Compose ───────────────────────────────────────────
+    function renderImportStage6() {
+        importWizard.stage = 6;
+        $('#compose-import-stepper').html(renderWizardStepper(6));
+
+        var result = importWizard.result;
+        var validation = result.validation || { valid: true, errors: [] };
+        var cfg = importWizard.config;
+        var svcKeys = Object.keys(importWizard.services);
+        var html = '';
+
+        // Validation bar
+        if (validation.valid) {
+            html += '<div class="import-validation-bar valid"><i class="fa fa-check-circle"></i> Compose configuration is valid</div>';
+        } else {
+            html += '<div class="import-validation-bar error"><i class="fa fa-times-circle"></i> Validation errors found</div>';
+            html += '<ul style="color:var(--status-error);margin:0 0 12px 20px;font-size:0.9rem;">';
+            validation.errors.forEach(function(e) {
+                html += '<li>' + composeEscapeHtml(e) + '</li>';
+            });
+            html += '</ul>';
+        }
+
+        // Summary panel
+        var hcCount = 0;
+        var depCount = 0;
+        Object.keys(cfg.healthchecks).forEach(function(k) { if (cfg.healthchecks[k]) hcCount++; });
+        Object.keys(cfg.dependencies).forEach(function(k) { if (cfg.dependencies[k] && cfg.dependencies[k].length) depCount++; });
+
+        html += '<div class="import-summary-panel">' +
+            '<div class="import-summary-item"><strong>Stack</strong>' + composeEscapeHtml(cfg.stackName) + '</div>' +
+            '<div class="import-summary-item"><strong>Services</strong>' + svcKeys.length + '</div>' +
+            '<div class="import-summary-item"><strong>Networks</strong>' +
+                (cfg.networkConfig.stackNetwork.enabled ? composeEscapeHtml(cfg.networkConfig.stackNetwork.name) : 'None') +
+                (cfg.networkConfig.externalNetworks.length ? ' + ' + cfg.networkConfig.externalNetworks.length + ' external' : '') +
+            '</div>' +
+            '<div class="import-summary-item"><strong>Healthchecks</strong>' + hcCount + '</div>' +
+            '<div class="import-summary-item"><strong>Dependencies</strong>' + depCount + '</div>' +
+            '</div>';
+
+        // Port conflict warnings
+        if (importWizard.portConflicts.length) {
+            html += '<div class="import-conflict-banner" style="margin-bottom:12px;"><i class="fa fa-exclamation-triangle"></i><div>';
+            importWizard.portConflicts.forEach(function(c) {
+                html += '<div>Port <strong>' + composeEscapeHtml(c.hostPort + '/' + c.protocol) +
+                    '</strong>: ' + c.services.map(composeEscapeHtml).join(', ') + '</div>';
+            });
+            html += '</div></div>';
+        }
+
+        // YAML preview
+        html += '<div class="import-preview-section">' +
+            '<div class="import-preview-section-title">docker-compose.yml</div>' +
+            '<pre class="import-preview-pre" id="iw-yaml-preview">' + composeEscapeHtml(result.composeYml || '') + '</pre>' +
+            '</div>';
+
+        // Env preview
+        if (result.env) {
+            html += '<details class="import-preview-section"><summary class="import-preview-section-title" style="cursor:pointer;">.env file</summary>' +
+                '<pre class="import-preview-pre">' + composeEscapeHtml(result.env) + '</pre></details>';
+        }
+
+        // Override preview
+        if (result.override) {
+            html += '<details class="import-preview-section"><summary class="import-preview-section-title" style="cursor:pointer;">Override file (icons/labels)</summary>' +
+                '<pre class="import-preview-pre">' + composeEscapeHtml(result.override) + '</pre></details>';
+        }
+
+        $('#compose-import-modal-body').html(html);
+        $('#compose-import-modal-footer').html(wizardFooter({
+            back: 'renderImportStage4()',
+            action: 'importWizardPerform()',
+            actionLabel: 'Import'
+        }));
+    }
+
+    // ── Final: Perform Import ───────────────────────────────────────────────
+    function importWizardPerform() {
+        var cfg = importWizard.config;
+        var result = importWizard.result;
 
         $.post(caURL, {
             action: 'performImportTransfer',
-            stackName: name,
-            stopContainers: stopContainers,
-            removeContainers: removeContainers,
-            startStack: startStack,
-            composeYml: payload.composeYml || '',
-            env: payload.env || '',
-            override: payload.override || '',
-            containerIds: JSON.stringify(payload.containerIds || [])
+            stackName: cfg.stackName,
+            stackDesc: cfg.stackDesc,
+            stopContainers: cfg.stopContainers ? '1' : '0',
+            removeContainers: cfg.removeContainers ? '1' : '0',
+            startStack: cfg.startStack ? '1' : '0',
+            composeYml: result.composeYml || '',
+            env: result.env || '',
+            override: result.override || '',
+            containerIds: JSON.stringify(importWizard.containerIds)
         }, function(data) {
             var response;
             try { response = JSON.parse(data); } catch (e) { response = { result:'error', message: 'Invalid response' }; }
@@ -2313,11 +3185,9 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
                 closeComposeImportModal();
                 composeLoadlist();
                 openEditorModalByProject(response.project, response.projectName);
-
                 if (response.startStack === 1 && response.projectPath) {
                     ComposeUp(response.projectPath);
                 }
-
                 swal('Imported', 'Stack imported successfully.', 'success');
             } else {
                 swal('Import failed', response.message || 'Unknown error', 'error');
@@ -2326,6 +3196,10 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
             swal('Import failed', 'Communication error', 'error');
         });
     }
+
+    // Keep legacy function names working (old callers)
+    function composeImportPreview() { importWizardStage1Next(); }
+    function composeImportPerform() { importWizardPerform(); }
 
     function stripTags(string) {
         return string.replace(/(<([^>]+)>)/ig, "");

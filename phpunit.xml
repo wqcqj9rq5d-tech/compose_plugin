@@ -13,7 +13,7 @@
     </testsuites>
     <source>
         <include>
-            <directory>source/compose.manager/php</directory>
+            <directory>source/compose.manager/include</directory>
         </include>
     </source>
     <coverage>

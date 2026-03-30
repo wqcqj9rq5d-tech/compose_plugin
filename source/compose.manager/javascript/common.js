@@ -2,7 +2,7 @@
 // Use `getConfig().then(cfg => { ... })` to access configuration.
 var _configCache = null;
 var _configPromise = null;
-var caURL = "/plugins/compose.manager/php/exec.php";
+var caURL = "/plugins/compose.manager/include/Exec.php";
 
 // Shared HTML/attribute escape helpers (namespaced to avoid global collisions with other plugins)
 function composeEscapeHtml(text) {

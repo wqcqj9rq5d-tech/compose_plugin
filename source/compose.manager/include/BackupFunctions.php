@@ -7,8 +7,8 @@
  * Archives are .tar.gz files containing stack directories.
  */
 
-require_once("/usr/local/emhttp/plugins/compose.manager/php/defines.php");
-require_once("/usr/local/emhttp/plugins/compose.manager/php/util.php");
+require_once("/usr/local/emhttp/plugins/compose.manager/include/Defines.php");
+require_once("/usr/local/emhttp/plugins/compose.manager/include/Util.php");
 
 /**
  * Get the backup destination path from config, falling back to default.
@@ -338,7 +338,7 @@ function formatBytes($bytes)
 
 /**
  * Log a message to syslog with compose.manager tag.
- * Guarded to avoid redeclaration when compose_util_functions.php is also loaded.
+ * Guarded to avoid redeclaration when Helpers.php is also loaded.
  */
 if (!function_exists('logger')) {
     function logger($message)

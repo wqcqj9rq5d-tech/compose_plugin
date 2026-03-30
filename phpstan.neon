@@ -4,7 +4,7 @@ parameters:
     - php
     - page
   paths:
-    - source/compose.manager/php
+    - source/compose.manager/include
   excludePaths:
     - */vendor/*
   ignoreErrors:

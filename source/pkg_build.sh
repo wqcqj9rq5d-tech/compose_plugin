@@ -73,7 +73,7 @@ cd $tmpdir || exit 1
 echo "Marking plugin scripts and PHP executable..."
 run_quiet chmod -R +x "$tmpdir/usr/local/emhttp/plugins/compose.manager/event/"
 run_quiet chmod -R +x "$tmpdir/usr/local/emhttp/plugins/compose.manager/scripts/"
-run_quiet chmod -R +x "$tmpdir/usr/local/emhttp/plugins/compose.manager/php/"
+run_quiet chmod -R +x "$tmpdir/usr/local/emhttp/plugins/compose.manager/include/"
 
 echo "Downloading Docker Compose CLI plugin v${COMPOSE_VERSION}..."
 run_quiet wget $(wget_args) "https://github.com/docker/compose/releases/download/v${COMPOSE_VERSION}/docker-compose-linux-x86_64"

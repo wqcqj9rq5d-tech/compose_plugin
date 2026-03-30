@@ -35,16 +35,17 @@ use PluginTests\StreamWrapper\UnraidStreamWrapper;
 use PluginTests\Mocks\FunctionMocks;
 
 // Initialize the plugin test environment
-// This auto-maps all .php files from source/compose.manager/php/ to Unraid paths
+// This auto-maps all .php files from source/compose.manager/include/ to Unraid paths
 PluginBootstrap::init(
     'compose.manager',
-    __DIR__ . '/../source/compose.manager/php',
+    __DIR__ . '/../source/compose.manager/include',
     [
         'config' => [
             'PROJECTS_FOLDER' => sys_get_temp_dir() . '/compose_test_projects',
             'DEBUG_TO_LOG' => 'false',
             'OUTPUTSTYLE' => 'nchan',
         ],
+        'subPath' => 'include',
     ]
 );
 

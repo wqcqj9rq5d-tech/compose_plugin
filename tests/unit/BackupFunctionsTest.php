@@ -1,9 +1,9 @@
 <?php
 
 /**
- * Unit Tests for backup_functions.php
+ * Unit Tests for BackupFunctions.php
  * 
- * Tests the backup/restore helper functions in source/compose.manager/php/backup_functions.php.
+ * Tests the backup/restore helper functions in source/compose.manager/include/BackupFunctions.php.
  * These functions handle creating, listing, restoring, and managing backup archives.
  */
 
@@ -14,10 +14,10 @@ namespace ComposeManager\Tests;
 use PluginTests\TestCase;
 use PluginTests\Mocks\FunctionMocks;
 
-// Load backup_functions.php only if not already loaded (avoids logger() redeclaration
-// conflict with compose_util_functions.php which also defines logger()).
+// Load BackupFunctions.php only if not already loaded (avoids logger() redeclaration
+// conflict with Helpers.php which also defines logger()).
 if (!function_exists('getBackupDestination')) {
-    require_once '/usr/local/emhttp/plugins/compose.manager/php/backup_functions.php';
+    require_once '/usr/local/emhttp/plugins/compose.manager/include/BackupFunctions.php';
 }
 
 class BackupFunctionsTest extends TestCase

@@ -6,7 +6,7 @@ Type="xmenu"
 ---
 <?php
 include "/usr/local/emhttp/plugins/dynamix.docker.manager/include/DockerClient.php";
-require_once("/usr/local/emhttp/plugins/compose.manager/php/defines.php");
+require_once("/usr/local/emhttp/plugins/compose.manager/include/Defines.php");
 $cfg = parse_plugin_cfg($sName);
 $ui_patch_button_type = (!$option_patch_ui && strcmp($cfg['PATCH_UI'], "true") == 0 && !isset($composemanDockerClientPatch)) ? "Button" : "Hidden";
 $ui_unpatch_button_type = (!$option_patch_ui && strcmp($cfg['PATCH_UI'], "false") == 0 && isset($composemanDockerClientPatch)) ? "Button" : "Hidden";
@@ -617,7 +617,7 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
 </style>
 <script src="<? autov('/plugins/compose.manager/javascript/common.js') ?>"></script>
 <script>
-    var caURL = "/plugins/compose.manager/php/exec.php";
+    var caURL = "/plugins/compose.manager/include/Exec.php";
     var skipPatchUI = <?php echo json_encode($option_patch_ui); ?>; // true when Unraid >= 6.12
     var logRefreshInterval = null;
     var autoScroll = true;
@@ -1522,10 +1522,10 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
 
     function loadUpdatesUI() {
         $('#updates-tbody').html('<tr><td colspan="5" class="compose-text-muted" style="text-align:center;padding:12px;">_(Loading stacks...)_</td></tr>');
-        $.post('/plugins/compose.manager/php/exec.php', {
+        $.post('/plugins/compose.manager/include/Exec.php', {
             action: 'listProjects'
         }, function(projects) {
-            $.post('/plugins/compose.manager/php/autoupdate.php', {
+            $.post('/plugins/compose.manager/include/AutoUpdate.php', {
                 action: 'getConfig'
             }, function(cfg) {
                 // Response is already parsed as JSON by jQuery due to Content-Type header
@@ -1585,7 +1585,7 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
     }
 
     function refreshCronStatus() {
-        $.post('/plugins/compose.manager/php/autoupdate.php', {
+        $.post('/plugins/compose.manager/include/AutoUpdate.php', {
             action: 'getCronStatus'
         }, function(r) {
             // Response is already parsed as JSON by jQuery due to Content-Type header
@@ -1716,7 +1716,7 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
             var schedulerEnabled = $('#AUTOUPDATE_ENABLED').is(':checked');
 
             // Save config first
-            $.post('/plugins/compose.manager/php/autoupdate.php', {
+            $.post('/plugins/compose.manager/include/AutoUpdate.php', {
                 action: 'saveConfig',
                 data: JSON.stringify(cfg)
             }, function(resp) {
@@ -1728,7 +1728,7 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
 
                 // Then update scheduler
                 var schedulerAction = schedulerEnabled ? 'installCron' : 'removeCron';
-                $.post('/plugins/compose.manager/php/autoupdate.php', {
+                $.post('/plugins/compose.manager/include/AutoUpdate.php', {
                     action: schedulerAction
                 }, function(d) {
                     setUpdatesSpinner(false);
@@ -1770,7 +1770,7 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
                     return;
                 }
                 var p = paths[idx++];
-                $.post('/plugins/compose.manager/php/autoupdate.php', {
+                $.post('/plugins/compose.manager/include/AutoUpdate.php', {
                     action: 'runNow',
                     path: p
                 }, function(data) {

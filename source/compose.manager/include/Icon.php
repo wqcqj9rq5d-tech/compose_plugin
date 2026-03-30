@@ -4,7 +4,7 @@
  */
 
 $docroot = $_SERVER['DOCUMENT_ROOT'] ?? '/usr/local/emhttp';
-require_once "$docroot/plugins/compose.manager/php/defines.php";
+require_once "$docroot/plugins/compose.manager/include/Defines.php";
 
 $project = $_GET['project'] ?? '';
 

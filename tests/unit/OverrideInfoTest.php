@@ -7,7 +7,7 @@ namespace ComposeManager\Tests;
 use PluginTests\TestCase;
 
 // Load the actual source file via stream wrapper
-require_once '/usr/local/emhttp/plugins/compose.manager/php/util.php';
+require_once '/usr/local/emhttp/plugins/compose.manager/include/Util.php';
 
 class OverrideInfoTest extends TestCase
 {

@@ -1,9 +1,9 @@
 <?php
 
 /**
- * Unit Tests for dashboard_stacks.php (REAL SOURCE)
+ * Unit Tests for DashboardStacks.php (REAL SOURCE)
  * 
- * Tests the dashboard tile data generation: source/compose.manager/php/dashboard_stacks.php
+ * Tests the dashboard tile data generation: source/compose.manager/include/DashboardStacks.php
  * This file returns JSON data for the compose manager dashboard tile.
  */
 
@@ -446,7 +446,7 @@ class DashboardStacksTest extends TestCase
      */
     public function testContentTypeForJsonResponse(): void
     {
-        // dashboard_stacks.php sets: header('Content-Type: application/json');
+        // DashboardStacks.php sets: header('Content-Type: application/json');
         $expectedHeader = 'Content-Type: application/json';
         
         // We can't actually test headers in unit tests, but we verify the format

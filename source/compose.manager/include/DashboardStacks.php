@@ -6,8 +6,8 @@
 
 $plugin_root = "/usr/local/emhttp/plugins/compose.manager";
 
-require_once("$plugin_root/php/defines.php");
-require_once("$plugin_root/php/util.php");
+require_once("$plugin_root/include/Defines.php");
+require_once("$plugin_root/include/Util.php");
 
 $summary = [
     'total' => 0,

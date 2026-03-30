@@ -15,7 +15,7 @@ use PluginTests\Mocks\DockerUtilMock;
 
 // Load the actual source file via stream wrapper using includeWithSwitch()
 // This safely includes exec.php which has a switch($_POST['action']) block
-includeWithSwitch('/usr/local/emhttp/plugins/compose.manager/php/exec.php');
+includeWithSwitch('/usr/local/emhttp/plugins/compose.manager/include/Exec.php');
 
 class DockerUpdateTest extends TestCase
 {

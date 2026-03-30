@@ -164,7 +164,7 @@ EOT;
 $script = <<<'EOT'
 <script>
 (function() {
-    var caURL = '/plugins/compose.manager/php/exec.php';
+    var caURL = '/plugins/compose.manager/include/Exec.php';
     var expandedStacks = {};
     var stackContainerCache = {};
 
@@ -294,7 +294,7 @@ $script .= <<<'EOT'
     }
 
     function stackAction(stackName, action) {
-        // Map dashboard action names to compose_util.php action names
+        // Map dashboard action names to ComposeUtil.php action names
         var actionMap = {
             'start': 'composeUp',
             'stop': 'composeStop',
@@ -305,7 +305,7 @@ $script .= <<<'EOT'
         var $status = $('#compose_stacks_status');
         $status.text(actionTitle + 'ing ' + stackName + '...');
 
-        $.post('/plugins/compose.manager/php/compose_util.php', {
+        $.post('/plugins/compose.manager/include/ComposeUtil.php', {
             action: apiAction,
             path: '/boot/config/plugins/compose.manager/projects/' + stackName
         }, function(data) {
@@ -324,7 +324,7 @@ $script .= <<<'EOT'
     function openStackLogs(stackName) {
         // Open combined logs for the stack in a new window
         var projectPath = '/boot/config/plugins/compose.manager/projects/' + stackName;
-        $.post('/plugins/compose.manager/php/compose_util.php', {
+        $.post('/plugins/compose.manager/include/ComposeUtil.php', {
             action: 'composeLogs',
             path: projectPath
         }, function(data) {
@@ -412,7 +412,7 @@ $script .= <<<'EOT'
     function openDockerTerminal(name, isLogs, shell) {
         if (isLogs) {
             // Logs — start ttyd via plugin, open in new window (same as stack logs)
-            $.post('/plugins/compose.manager/php/compose_util.php', {
+            $.post('/plugins/compose.manager/include/ComposeUtil.php', {
                 action: 'containerLogs',
                 container: name
             }, function(data) {
@@ -425,7 +425,7 @@ $script .= <<<'EOT'
             });
         } else {
             // Console — start writable ttyd via plugin, open directly
-            $.post('/plugins/compose.manager/php/compose_util.php', {
+            $.post('/plugins/compose.manager/include/ComposeUtil.php', {
                 action: 'containerConsole',
                 container: name,
                 shell: shell || '/bin/bash'
@@ -542,7 +542,7 @@ $script .= <<<'EOT'
     }
 
     function loadComposeStacks() {
-        $.post('/plugins/compose.manager/php/dashboard_stacks.php', function(data) {
+        $.post('/plugins/compose.manager/include/DashboardStacks.php', function(data) {
             var statusText = 'Stacks -- Started: ' + data.started + ', Stopped: ' + data.stopped;
             if (data.partial > 0) statusText += ', Partial: ' + data.partial;
             $('#compose_stacks_status').text(statusText);

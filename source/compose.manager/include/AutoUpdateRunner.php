@@ -2,8 +2,8 @@
 /**
  * Runner invoked by cron to check autoupdate.json and run updates when scheduled
  */
-require_once("/usr/local/emhttp/plugins/compose.manager/php/defines.php");
-require_once("/usr/local/emhttp/plugins/compose.manager/php/util.php");
+require_once("/usr/local/emhttp/plugins/compose.manager/include/Defines.php");
+require_once("/usr/local/emhttp/plugins/compose.manager/include/Util.php");
 
 $autofile = getAutoUpdateConfigFilePath();
 if (!is_file($autofile)) exit(0);

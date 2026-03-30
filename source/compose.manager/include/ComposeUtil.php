@@ -4,10 +4,10 @@
  * Compose Util - AJAX Action Handler for Compose Manager
  *
  * Handles compose actions like up, down, pull, etc.
- * Functions are defined in compose_util_functions.php for testability.
+ * Functions are defined in Helpers.php for testability.
  */
 
-require_once("/usr/local/emhttp/plugins/compose.manager/php/compose_util_functions.php");
+require_once("/usr/local/emhttp/plugins/compose.manager/include/Helpers.php");
 
 $background = isset($_POST['background']) && $_POST['background'] == '1';
 
@@ -108,7 +108,7 @@ switch ($_POST['action']) {
             // Wait for ttyd to create the socket (up to 2s) to avoid 502
             waitForTtydSocket($socketName);
 
-            echo "/plugins/compose.manager/php/show_ttyd.php?socket=" . urlencode($socketName);
+            echo "/plugins/compose.manager/include/ShowTtyd.php?socket=" . urlencode($socketName);
         }
         break;
 }

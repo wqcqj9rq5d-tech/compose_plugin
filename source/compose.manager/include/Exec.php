@@ -1,8 +1,8 @@
 <?php
 
-require_once("/usr/local/emhttp/plugins/compose.manager/php/defines.php");
-require_once("/usr/local/emhttp/plugins/compose.manager/php/util.php");
-require_once("/usr/local/emhttp/plugins/compose.manager/php/exec_functions.php");
+require_once("/usr/local/emhttp/plugins/compose.manager/include/Defines.php");
+require_once("/usr/local/emhttp/plugins/compose.manager/include/Util.php");
+require_once("/usr/local/emhttp/plugins/compose.manager/include/ExecHelpers.php");
 require_once("/usr/local/emhttp/plugins/dynamix/include/Wrappers.php");
 
 /**
@@ -1160,7 +1160,7 @@ switch ($_POST['action']) {
         break;
 
     case 'createBackup':
-        require_once("/usr/local/emhttp/plugins/compose.manager/php/backup_functions.php");
+        require_once("/usr/local/emhttp/plugins/compose.manager/include/BackupFunctions.php");
         clientDebug("[backup] Manual backup starting...", null, 'daemon', 'info');
         $result = createBackup();
         if ($result['result'] === 'success') {
@@ -1172,14 +1172,14 @@ switch ($_POST['action']) {
         break;
 
     case 'listBackups':
-        require_once("/usr/local/emhttp/plugins/compose.manager/php/backup_functions.php");
+        require_once("/usr/local/emhttp/plugins/compose.manager/include/BackupFunctions.php");
         $directory = isset($_POST['directory']) && $_POST['directory'] !== '' ? trim($_POST['directory']) : null;
         $archives = listBackupArchives($directory);
         echo json_encode(['result' => 'success', 'archives' => $archives]);
         break;
 
     case 'uploadBackup':
-        require_once("/usr/local/emhttp/plugins/compose.manager/php/backup_functions.php");
+        require_once("/usr/local/emhttp/plugins/compose.manager/include/BackupFunctions.php");
         if (!isset($_FILES['file']) || $_FILES['file']['error'] !== UPLOAD_ERR_OK) {
             $errMsg = 'No file uploaded.';
             if (isset($_FILES['file'])) {
@@ -1229,7 +1229,7 @@ switch ($_POST['action']) {
         break;
 
     case 'readManifest':
-        require_once("/usr/local/emhttp/plugins/compose.manager/php/backup_functions.php");
+        require_once("/usr/local/emhttp/plugins/compose.manager/include/BackupFunctions.php");
         $archive = isset($_POST['archive']) ? trim($_POST['archive']) : '';
         $directory = isset($_POST['directory']) && $_POST['directory'] !== '' ? trim($_POST['directory']) : null;
         if (empty($archive)) {
@@ -1242,7 +1242,7 @@ switch ($_POST['action']) {
         break;
 
     case 'restoreBackup':
-        require_once("/usr/local/emhttp/plugins/compose.manager/php/backup_functions.php");
+        require_once("/usr/local/emhttp/plugins/compose.manager/include/BackupFunctions.php");
         $archive = isset($_POST['archive']) ? basename(trim($_POST['archive'])) : '';
         $stacks = isset($_POST['stacks']) ? $_POST['stacks'] : '';
         if (is_string($stacks)) {
@@ -1272,7 +1272,7 @@ switch ($_POST['action']) {
         break;
 
     case 'deleteBackup':
-        require_once("/usr/local/emhttp/plugins/compose.manager/php/backup_functions.php");
+        require_once("/usr/local/emhttp/plugins/compose.manager/include/BackupFunctions.php");
         $archive = isset($_POST['archive']) ? trim($_POST['archive']) : '';
         if (empty($archive)) {
             echo json_encode(['result' => 'error', 'message' => 'No archive specified.']);
@@ -1289,7 +1289,7 @@ switch ($_POST['action']) {
         break;
 
     case 'updateBackupCron':
-        require_once("/usr/local/emhttp/plugins/compose.manager/php/backup_functions.php");
+        require_once("/usr/local/emhttp/plugins/compose.manager/include/BackupFunctions.php");
         updateBackupCron();
         echo json_encode(['result' => 'success', 'message' => 'Backup schedule updated.']);
         break;
@@ -1347,7 +1347,7 @@ switch ($_POST['action']) {
         file_put_contents($cfgFile, implode("\n", $lines) . "\n");
 
         // Update cron job and log the action
-        require_once("/usr/local/emhttp/plugins/compose.manager/php/backup_functions.php");
+        require_once("/usr/local/emhttp/plugins/compose.manager/include/BackupFunctions.php");
         updateBackupCron();
 
         // Log the scheduler status

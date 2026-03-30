@@ -7,7 +7,7 @@ namespace ComposeManager\Tests;
 use PluginTests\TestCase;
 
 /**
- * Source-level tests for compose_manager_main.php.
+ * Source-level tests for ComposeManager.php.
  *
  * These verify key CPU/memory load logic markers in the page source so
  * regressions are caught even when the page cannot be executed in unit tests.
@@ -19,8 +19,8 @@ class ComposeManagerMainSourceTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->mainPagePath = __DIR__ . '/../../source/compose.manager/php/compose_manager_main.php';
-        $this->assertFileExists($this->mainPagePath, 'compose_manager_main.php must exist');
+        $this->mainPagePath = __DIR__ . '/../../source/compose.manager/include/ComposeManager.php';
+        $this->assertFileExists($this->mainPagePath, 'ComposeManager.php must exist');
     }
 
     private function getPageSource(): string

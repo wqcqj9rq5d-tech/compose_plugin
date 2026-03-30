@@ -1,11 +1,11 @@
 <?php
 
 /**
- * Unit Tests for exec_functions.php (REAL SOURCE)
+ * Unit Tests for ExecHelpers.php (REAL SOURCE)
  * 
- * Tests the actual source functions from source/compose.manager/php/exec_functions.php
+ * Tests the actual source functions from source/compose.manager/include/ExecHelpers.php
  * 
- * exec_functions.php contains these functions:
+ * ExecHelpers.php contains these functions:
  * - getElement($element) - converts element name to safe HTML ID
  * - normalizeImageForUpdateCheck($image) - normalizes Docker image names for update checking
  * - sanitizeFolderName($stackName) - sanitizes stack names for folder creation
@@ -18,7 +18,7 @@ namespace ComposeManager\Tests;
 use PluginTests\TestCase;
 
 // Load the actual source functions file directly (no switch statement to bypass)
-require_once '/usr/local/emhttp/plugins/compose.manager/php/exec_functions.php';
+require_once '/usr/local/emhttp/plugins/compose.manager/include/ExecHelpers.php';
 
 /**
  * @covers ::getElement

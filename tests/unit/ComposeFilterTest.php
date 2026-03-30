@@ -7,7 +7,7 @@ namespace ComposeManager\Tests;
 use PluginTests\TestCase;
 
 // Include util.php (contains hide_compose_from_docker())
-include_once '/usr/local/emhttp/plugins/compose.manager/php/util.php';
+include_once '/usr/local/emhttp/plugins/compose.manager/include/Util.php';
 
 class ComposeFilterTest extends TestCase
 {

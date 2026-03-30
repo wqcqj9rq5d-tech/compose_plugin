@@ -21,8 +21,8 @@ class ComposeListHtmlTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->listPagePath = __DIR__ . '/../../source/compose.manager/php/compose_list.php';
-        $this->assertFileExists($this->listPagePath, 'compose_list.php must exist');
+        $this->listPagePath = __DIR__ . '/../../source/compose.manager/include/ComposeList.php';
+        $this->assertFileExists($this->listPagePath, 'ComposeList.php must exist');
     }
 
     private function getPageSource(): string

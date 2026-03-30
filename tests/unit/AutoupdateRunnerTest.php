@@ -1,6 +1,6 @@
 <?php
 /**
- * Tests for autoupdate_runner.php
+ * Tests for AutoUpdateRunner.php
  */
 declare(strict_types=1);
 namespace ComposeManager\Tests;
@@ -18,15 +18,15 @@ class AutoupdateRunnerTest extends TestCase
         if (!is_dir($compose_root)) mkdir($compose_root, 0755, true);
         // ensure scripts dir
         if (!is_dir($plugin_root . 'scripts')) mkdir($plugin_root . 'scripts', 0755, true);
-        // ensure php helper path and create shim
-        if (!is_dir($plugin_root . 'php')) mkdir($plugin_root . 'php', 0755, true);
+        // ensure include helper path and create shim
+        if (!is_dir($plugin_root . 'include')) mkdir($plugin_root . 'include', 0755, true);
         $shim = <<<'PHP'
 <?php
 $marker = getenv('AUTOTEST_MARKER');
 if ($marker) file_put_contents($marker, "RAN\n");
 exit(0);
 PHP;
-        file_put_contents($plugin_root . 'php/sh_wrapper.php', $shim);
+        file_put_contents($plugin_root . 'include/sh_wrapper.php', $shim);
         // redirect cron writes to plugin root in tests (not strictly needed here but harmless)
         putenv('COMPOSE_MANAGER_CRON_DIR=' . $plugin_root);
         // ensure autoupdate config file resolves to plugin_root in tests
@@ -78,11 +78,11 @@ PHP;
 
         // configure shim so the runner will invoke our PHP wrapper instead of a real sh
         putenv('AUTOTEST_MARKER=' . $marker);
-        $wrapper = $plugin_root . 'php/sh_wrapper.php';
+        $wrapper = $plugin_root . 'include/sh_wrapper.php';
         putenv('COMPOSE_MANAGER_SH=' . PHP_BINARY . ' ' . escapeshellarg($wrapper));
 
         // Run runner (include directly)
-        include $plugin_root . 'php/autoupdate_runner.php';
+        include $plugin_root . 'include/AutoUpdateRunner.php';
 
         // The runner backgrounds the script; wait briefly
         sleep(1);

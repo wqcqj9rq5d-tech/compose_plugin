@@ -3,7 +3,7 @@
 /**
  * Unit Tests for defines.php
  * 
- * Tests the locate_compose_root() function in source/compose.manager/php/defines.php
+ * Tests the locate_compose_root() function in source/compose.manager/include/Defines.php
  */
 
 declare(strict_types=1);
@@ -14,7 +14,7 @@ use PluginTests\TestCase;
 use PluginTests\Mocks\FunctionMocks;
 
 // Load the actual source file via stream wrapper
-require_once '/usr/local/emhttp/plugins/compose.manager/php/defines.php';
+require_once '/usr/local/emhttp/plugins/compose.manager/include/Defines.php';
 
 class DefinesTest extends TestCase
 {

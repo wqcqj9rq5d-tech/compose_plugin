@@ -8,8 +8,8 @@ Cond="$var['fsState'] == 'Started' && exec('/etc/rc.d/rc.docker status | grep -v
 ---
 <link type="text/css" rel="stylesheet" href="<?autov('/webGui/styles/jquery.switchbutton.css')?>">
 <link type="text/css" rel="stylesheet" href="<?autov('/webGui/styles/jquery.filetree.css')?>">
-<link type="text/css" rel="stylesheet" href="<?autov('/plugins/compose.manager/styles/comboButton.css')?>">
-<link type="text/css" rel="stylesheet" href="<?autov('/plugins/compose.manager/styles/editorModal.css')?>">
+<link type="text/css" rel="stylesheet" href="<?autov('/plugins/compose.manager/sheets/ComboButton.css')?>">
+<link type="text/css" rel="stylesheet" href="<?autov('/plugins/compose.manager/sheets/EditorModal.css')?>">
 <script src="<?autov('/webGui/javascript/jquery.switchbutton.js')?>"></script>
 <script src="<?autov('/webGui/javascript/jquery.filetree.js')?>" charset="utf-8"></script>
 <script src="<?autov('/plugins/dynamix.docker.manager/javascript/docker.js')?>"></script>
@@ -18,4 +18,4 @@ table tbody td {
     line-height:normal
 }
 </style>
-<?php include '/usr/local/emhttp/plugins/compose.manager/php/compose_manager_main.php';?>
+<?php include '/usr/local/emhttp/plugins/compose.manager/include/ComposeManager.php';?>

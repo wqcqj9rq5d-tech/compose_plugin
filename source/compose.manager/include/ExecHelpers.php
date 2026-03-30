@@ -2,8 +2,8 @@
 /**
  * Exec Functions for Compose Manager
  * 
- * Contains utility functions used by exec.php for AJAX action handling.
- * Separated from exec.php to allow unit testing without triggering the switch statement.
+ * Contains utility functions used by Exec.php for AJAX action handling.
+ * Separated from Exec.php to allow unit testing without triggering the switch statement.
  */
 
 /**
@@ -77,6 +77,6 @@ if (!function_exists('sanitizeFolderName')) {
 function buildComposeArgs(string $stack): array {
     global $compose_root;
 
-    require_once("/usr/local/emhttp/plugins/compose.manager/php/util.php");
+    require_once("/usr/local/emhttp/plugins/compose.manager/include/Util.php");
     return StackInfo::fromProject($compose_root, $stack)->buildComposeArgs();
 }

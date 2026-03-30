@@ -204,7 +204,7 @@
 
   /* ── Stack table structural rules ──
    Critical layout rules (table-layout, column widths, advanced/basic
-   visibility) are inlined in compose_manager_main.php for instant
+   visibility) are inlined in ComposeManager.php for instant
    availability.  The rules below are supplemental / non-critical. */
 
   /* Update column links - ensure pointer cursor */

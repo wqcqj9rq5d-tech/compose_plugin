@@ -5,8 +5,8 @@
  * This file is called via AJAX to load the stack list without blocking page load
  */
 
-require_once("/usr/local/emhttp/plugins/compose.manager/php/defines.php");
-require_once("/usr/local/emhttp/plugins/compose.manager/php/util.php");
+require_once("/usr/local/emhttp/plugins/compose.manager/include/Defines.php");
+require_once("/usr/local/emhttp/plugins/compose.manager/include/Util.php");
 
 $cfg = parse_plugin_cfg($sName);
 

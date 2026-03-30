@@ -3,12 +3,12 @@
 /**
  * Compose Util Functions for Compose Manager
  *
- * Contains utility functions used by compose_util.php for compose command execution.
- * Separated from compose_util.php to allow unit testing without triggering the switch statement.
+ * Contains utility functions used by ComposeUtil.php for compose command execution.
+ * Separated from ComposeUtil.php to allow unit testing without triggering the switch statement.
  */
 
-require_once("/usr/local/emhttp/plugins/compose.manager/php/defines.php");
-require_once("/usr/local/emhttp/plugins/compose.manager/php/util.php");
+require_once("/usr/local/emhttp/plugins/compose.manager/include/Defines.php");
+require_once("/usr/local/emhttp/plugins/compose.manager/include/Util.php");
 require_once("/usr/local/emhttp/plugins/dynamix/include/Wrappers.php");
 
 /**
@@ -179,7 +179,7 @@ function echoComposeCommand($action, $recreate = false, $background = false)
             $composeCommandStr = join(" ", $composeCommandEscaped);
             execComposeCommandInTTY($composeCommandStr, $debug, $logFile);
             clientDebug("Executing command in ttyd: " . $composeCommandStr, ['command' => $composeCommandStr], 'daemon', 'debug');
-            $composeCommand = "/plugins/compose.manager/php/show_ttyd.php" . ($action !== 'logs' ? "?done=1" : "");
+            $composeCommand = "/plugins/compose.manager/include/ShowTtyd.php" . ($action !== 'logs' ? "?done=1" : "");
             echo $composeCommand;
         } else {
             $i = 0;
@@ -331,7 +331,7 @@ function echoComposeCommandMultiple($action, $paths, $background = false)
         $ttydCommand = "bash " . escapeshellarg($tmpScript);
         execComposeCommandInTTY($ttydCommand, $debug);
         clientDebug("Multi-stack script created: " . $tmpScript, null, 'daemon', 'debug');
-        echo "/plugins/compose.manager/php/show_ttyd.php?done=1";
+        echo "/plugins/compose.manager/include/ShowTtyd.php?done=1";
     } else {
         // For nchan/traditional output, create a temporary bash script that runs all commands
         $tmpScript = "/tmp/compose_multi_" . uniqid() . ".sh";

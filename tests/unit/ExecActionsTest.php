@@ -3,8 +3,8 @@
 /**
  * Unit Tests for exec.php Actions (REAL SOURCE)
  * 
- * Tests the AJAX action handlers in source/compose.manager/php/exec.php
- * Now that functions are in exec_functions.php, we can include exec.php
+ * Tests the AJAX action handlers in source/compose.manager/include/Exec.php
+ * Now that functions are in ExecHelpers.php, we can include Exec.php
  * multiple times to test different actions.
  * 
  * Note: Some tests use Linux commands (rm) and are skipped on Windows.
@@ -18,7 +18,7 @@ use PluginTests\TestCase;
 use PluginTests\Mocks\FunctionMocks;
 
 
-require_once '/usr/local/emhttp/plugins/compose.manager/php/util.php';
+require_once '/usr/local/emhttp/plugins/compose.manager/include/Util.php';
 
 class ExecActionsTest extends TestCase
 {
@@ -85,7 +85,7 @@ class ExecActionsTest extends TestCase
         $_POST = array_merge(['action' => $action], $postData);
         
         ob_start();
-        include '/usr/local/emhttp/plugins/compose.manager/php/exec.php';
+        include '/usr/local/emhttp/plugins/compose.manager/include/Exec.php';
         $output = ob_get_clean();
         
         $_POST = [];

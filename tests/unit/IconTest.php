@@ -3,7 +3,7 @@
 /**
  * Unit Tests for icon.php (REAL SOURCE)
  * 
- * Tests the icon serving endpoint: source/compose.manager/php/icon.php
+ * Tests the icon serving endpoint: source/compose.manager/include/Icon.php
  * This file serves project icons via GET requests.
  */
 
@@ -110,7 +110,7 @@ class IconTest extends TestCase
         $originalHeaders = [];
         
         try {
-            include '/usr/local/emhttp/plugins/compose.manager/php/icon.php';
+            include '/usr/local/emhttp/plugins/compose.manager/include/Icon.php';
         } catch (\Throwable $e) {
             // Icon.php uses exit(), catch any issues
         }

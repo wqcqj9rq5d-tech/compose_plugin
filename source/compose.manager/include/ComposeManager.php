@@ -5,8 +5,8 @@
  * The stack list is loaded asynchronously via AJAX for better UX
  */
 
-require_once("/usr/local/emhttp/plugins/compose.manager/php/defines.php");
-require_once("/usr/local/emhttp/plugins/compose.manager/php/util.php");
+require_once("/usr/local/emhttp/plugins/compose.manager/include/Defines.php");
+require_once("/usr/local/emhttp/plugins/compose.manager/include/Util.php");
 
 // Load plugin config
 $cfg = parse_plugin_cfg($sName);
@@ -58,7 +58,7 @@ if ($cpuCount <= 0) {
     $cpuCount = 1;
 }
 
-// Note: Stack list is now loaded asynchronously via compose_list.php
+// Note: Stack list is now loaded asynchronously via ComposeList.php
 // This improves page load time by deferring expensive docker commands
 ?>
 
@@ -263,8 +263,8 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
 <script src="/plugins/compose.manager/javascript/common.js" type="text/javascript"></script>
 <script>
     var compose_root = <?php echo json_encode($compose_root); ?>;
-    var caURL = "/plugins/compose.manager/php/exec.php";
-    var compURL = "/plugins/compose.manager/php/compose_util.php";
+    var caURL = "/plugins/compose.manager/include/Exec.php";
+    var compURL = "/plugins/compose.manager/include/ComposeUtil.php";
     var aceTheme = <?php echo (in_array($theme, ['black', 'gray']) ? json_encode('ace/theme/tomorrow_night') : json_encode('ace/theme/tomorrow')); ?>;
     var aceBasePath = <?php echo json_encode($acePath); ?>;
     const icon_label = <?php echo json_encode($docker_label_icon); ?>;
@@ -480,7 +480,7 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
                 showComposeSpinner('Loading stack list...');
             }, 500);
 
-            $.get('/plugins/compose.manager/php/compose_list.php')
+            $.get('/plugins/compose.manager/include/ComposeList.php')
             .done(function(data) {
                 clearTimeout(composeTimers.load);
 
@@ -657,8 +657,8 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
 
     // Load external stylesheets (non-critical styles — critical ones are inline above)
     (function() {
-        var base = '<? autov("/plugins/compose.manager/styles/comboButton.css"); ?>';
-        var editor = '<? autov("/plugins/compose.manager/styles/editorModal.css"); ?>';
+        var base = '<? autov("/plugins/compose.manager/sheets/ComboButton.css"); ?>';
+        var editor = '<? autov("/plugins/compose.manager/sheets/EditorModal.css"); ?>';
         if (!$('link[href="' + base + '"]').length)
             $('head').append($('<link rel="stylesheet" type="text/css" />').attr('href', base));
         if (!$('link[href="' + editor + '"]').length)
@@ -1869,7 +1869,7 @@ $acePath = file_exists('/usr/local/emhttp/plugins/dynamix/javascript/ace/ace.js'
                 }
 
                 composeStackIndex.forEach(function(entry) {
-                    // Primary: short IDs baked into the row by compose_list.php
+                    // Primary: short IDs baked into the row by ComposeList.php
                     var idList = entry.containerIds.slice();
 
                     // Fallback: if the detail panel was expanded, stackContainersCache

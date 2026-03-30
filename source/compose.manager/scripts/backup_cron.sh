@@ -10,8 +10,8 @@ logger -t "$LOG_TAG" "[backup] Scheduled backup starting..."
 # Execute the backup via the PHP backend
 result=$(php -r "
   \$_POST = ['action' => 'createBackup'];
-  require_once('${PLUGIN_ROOT}/php/defines.php');
-  require_once('${PLUGIN_ROOT}/php/backup_functions.php');
+  require_once('${PLUGIN_ROOT}/include/Defines.php');
+  require_once('${PLUGIN_ROOT}/include/BackupFunctions.php');
   \$r = createBackup();
   echo json_encode(\$r);
 ")

@@ -24,8 +24,8 @@ if (!empty($_SERVER['REQUEST_URI'])) {
 	}
 }
 ?>
-<link type="text/css" rel="stylesheet" href="<?autov('/plugins/compose.manager/styles/comboButton.css')?>">
-<link type="text/css" rel="stylesheet" href="<?autov('/plugins/compose.manager/styles/editorModal.css')?>">
+<link type="text/css" rel="stylesheet" href="<?autov('/plugins/compose.manager/sheets/ComboButton.css')?>">
+<link type="text/css" rel="stylesheet" href="<?autov('/plugins/compose.manager/sheets/EditorModal.css')?>">
 <link type="text/css" rel="stylesheet" href="<?autov('/webGui/styles/jquery.filetree.css')?>">
 <script src="<?autov('/webGui/javascript/jquery.filetree.js')?>" charset="utf-8"></script>
-<?php include '/usr/local/emhttp/plugins/compose.manager/php/compose_manager_main.php';?>
+<?php include '/usr/local/emhttp/plugins/compose.manager/include/ComposeManager.php';?>

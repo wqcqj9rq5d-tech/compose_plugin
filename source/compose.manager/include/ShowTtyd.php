@@ -1,5 +1,5 @@
 <?php
-require_once("/usr/local/emhttp/plugins/compose.manager/php/defines.php");
+require_once("/usr/local/emhttp/plugins/compose.manager/include/Defines.php");
 
 // Allow callers to override the socket name via query parameter
 // (used by per-container console/logs). Sanitise to alphanumeric + _ and -.

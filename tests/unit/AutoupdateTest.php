@@ -47,7 +47,7 @@ class AutoupdateTest extends TestCase
     {
         $_POST = ['action' => 'getConfig'];
         ob_start();
-        include '/usr/local/emhttp/plugins/compose.manager/php/autoupdate.php';
+        include '/usr/local/emhttp/plugins/compose.manager/include/AutoUpdate.php';
         $out = ob_get_clean();
         $json = json_decode($out, true);
         $this->assertIsArray($json);
@@ -58,7 +58,7 @@ class AutoupdateTest extends TestCase
     public function testRunNowMissingPathReturnsError(): void
     {
         $_POST = ['action' => 'runNow'];
-        ob_start(); include '/usr/local/emhttp/plugins/compose.manager/php/autoupdate.php'; $out = ob_get_clean();
+        ob_start(); include '/usr/local/emhttp/plugins/compose.manager/include/AutoUpdate.php'; $out = ob_get_clean();
         $r = json_decode($out, true);
         $this->assertArrayHasKey('error', $r);
         $_POST = [];
@@ -86,7 +86,7 @@ class AutoupdateTest extends TestCase
         putenv('COMPOSE_MANAGER_SH=' . PHP_BINARY . ' ' . escapeshellarg($wrapper));
 
         $_POST = ['action' => 'runNow', 'path' => $tmp];
-        ob_start(); include '/usr/local/emhttp/plugins/compose.manager/php/autoupdate.php'; $out = ob_get_clean();
+        ob_start(); include '/usr/local/emhttp/plugins/compose.manager/include/AutoUpdate.php'; $out = ob_get_clean();
         $r = json_decode($out, true);
         // rc should be 0 for our stub
         $this->assertEquals(0, $r['rc']);
@@ -111,7 +111,7 @@ class AutoupdateTest extends TestCase
 
         $_POST = ['action' => 'installCron'];
         ob_start();
-        include '/usr/local/emhttp/plugins/compose.manager/php/autoupdate.php';
+        include '/usr/local/emhttp/plugins/compose.manager/include/AutoUpdate.php';
         $out = ob_get_clean();
 
         $response = json_decode($out, true);
@@ -122,7 +122,7 @@ class AutoupdateTest extends TestCase
 
         $line = file_get_contents($cronFile);
         $this->assertStringContainsString('/usr/bin/php', $line);
-        $this->assertStringContainsString('autoupdate_runner.php', $line);
+        $this->assertStringContainsString('AutoUpdateRunner.php', $line);
 
         if (is_file($cronFile)) {
             unlink($cronFile);
